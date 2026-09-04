@@ -220,7 +220,9 @@ test('every family emits 9 bytes with the right header and trailer', () => {
 
 test('effect tables are picked per family', () => {
   assert.equal(ffe0.effects('LEDBLE-00-1').length, 23)
+  // LEDCAR keeps its own table even on the 7B variants.
   assert.equal(ffe0.effects('LEDCAR-01-1').length, 23)
+  assert.equal(ffe0.effects('LEDCAR-02-1').length, 23)
   assert.equal(ffe0.effects('LEDDMX-00-1').length, 211)
   assert.equal(driverFor('LEDDMX-00-ABCD')?.id, 'ffe0')
   assert.equal(driverFor('LEDCAR-02-ABCD')?.id, 'ffe0')
@@ -295,4 +297,101 @@ test('bledim claims only genuine names, never clone modules or the ELK family', 
   // Same service, different protocol — these must still reach fff0.
   assert.equal(driverFor('MELK-OC')?.id, 'fff0')
   assert.equal(driverFor('ELK-BLEDOM')?.id, 'fff0')
+})
+
+test('ffe0 routes the remaining LED+LAMP families', async () => {
+  const { layoutFor } = await import('./ffe0.ts')
+  assert.equal(layoutFor('LEDSMART-01'), 'smart')
+  assert.equal(layoutFor('LEDSUN-02'), 'sun')
+  assert.equal(layoutFor('LEDLIKE-03'), 'like')
+  assert.equal(layoutFor('LEDPHO-04'), 'pho')
+  for (const n of ['LEDSMART-1', 'LEDSUN-1', 'LEDLIKE-1', 'LEDPHO-1']) {
+    assert.equal(driverFor(n)?.id, 'ffe0', n)
+  }
+})
+
+test('LEDSMART, LEDSUN, LEDLIKE and LEDPHO frames match the decompiled source', () => {
+  // LEDSMART 7D .. DF
+  assert.equal(hex(ffe0.power(true, 'LEDSMART-1')), '7d 01 01 01 ff ff ff ff df')
+  assert.equal(hex(ffe0.power(false, 'LEDSMART-1')), '7d 01 01 00 ff ff ff ff df')
+  assert.equal(hex(ffe0.rgb(1, 2, 3, 'LEDSMART-1')), '7d 02 01 ff 01 02 03 ff df')
+  assert.equal(hex(ffe0.brightness(50, 'LEDSMART-1')), '7d 02 02 32 ff ff ff ff df')
+  assert.equal(hex(ffe0.speed(50, 'LEDSMART-1')), '7d 02 04 32 ff ff ff ff df')
+  assert.equal(hex(ffe0.effect({ id: 7, name: 'x' }, 'LEDSMART-1')), '7d 02 05 07 ff ff ff ff df')
+  assert.equal(hex(ffe0.white!(40, 'LEDSMART-1')), '7d 02 07 28 ff ff ff ff df')
+
+  // LEDSUN 7A .. AF
+  assert.equal(hex(ffe0.power(true, 'LEDSUN-1')), '7a 01 01 ff ff ff ff ff af')
+  assert.equal(hex(ffe0.brightness(50, 'LEDSUN-1')), '7a 02 32 ff ff ff ff ff af')
+  assert.equal(hex(ffe0.speed(50, 'LEDSUN-1')), '7a 03 32 ff ff ff ff ff af')
+  assert.equal(hex(ffe0.cct!(30, 70, 'LEDSUN-1')), '7a 05 1e ff ff ff ff ff af')
+  assert.equal(hex(ffe0.effect({ id: 3, name: 'x' }, 'LEDSUN-1')), '7a 06 03 ff ff ff ff ff af')
+
+  // LEDLIKE 70 .. 0F
+  assert.equal(hex(ffe0.power(true, 'LEDLIKE-1')), '70 01 01 ff ff ff ff ff 0f')
+  assert.equal(hex(ffe0.brightness(50, 'LEDLIKE-1')), '70 02 32 ff ff ff ff ff 0f')
+  assert.equal(hex(ffe0.speed(50, 'LEDLIKE-1')), '70 03 32 ff ff ff ff ff 0f')
+  assert.equal(hex(ffe0.effect({ id: 5, name: 'x' }, 'LEDLIKE-1')), '70 ff 05 ff ff ff ff ff 0f')
+
+  // LEDPHO 72 .. 2F — the last three params are the group address, zero = broadcast.
+  assert.equal(hex(ffe0.power(true, 'LEDPHO-1')), '72 01 01 00 ff 00 00 00 2f')
+  assert.equal(hex(ffe0.rgb(255, 0, 0, 'LEDPHO-1')), '72 04 ff 00 00 00 00 00 2f')
+  assert.equal(hex(ffe0.brightness(50, 'LEDPHO-1')), '72 02 32 00 ff 00 00 00 2f')
+  assert.equal(hex(ffe0.speed(50, 'LEDPHO-1')), '72 09 32 ff ff 00 00 00 2f')
+  assert.equal(hex(ffe0.cct!(60, 40, 'LEDPHO-1')), '72 05 3c ff ff 00 00 00 2f')
+  assert.equal(hex(ffe0.effect({ id: 9, name: 'x' }, 'LEDPHO-1')), '72 08 09 ff ff 00 00 00 2f')
+})
+
+test('white-only families drive the white channel instead of faking RGB', () => {
+  // LEDSUN and LEDLIKE hardware has no colour channel at all.
+  assert.equal(ffe0.caps('LEDSUN-1').rgb, false)
+  assert.equal(ffe0.caps('LEDLIKE-1').rgb, false)
+  assert.equal(ffe0.caps('LEDSMART-1').rgb, true)
+  assert.equal(ffe0.caps('LEDPHO-1').rgb, true)
+  // Asking for colour anyway maps to luminance rather than emitting a bogus frame.
+  assert.equal(hex(ffe0.rgb(255, 255, 255, 'LEDSUN-1')), '7a 02 64 ff ff ff ff ff af')
+  assert.equal(hex(ffe0.rgb(0, 0, 0, 'LEDLIKE-1')), '70 02 00 ff ff ff ff ff 0f')
+})
+
+test('only the families that use it get the 2A handshake', () => {
+  assert.equal(ffe0.onConnect!('LEDBLE-00-1').length, 1)
+  assert.equal(ffe0.onConnect!('LEDDMX-00-1').length, 1)
+  assert.equal(ffe0.onConnect!('LEDSMART-1').length, 0)
+  assert.equal(ffe0.onConnect!('LEDPHO-1').length, 0)
+})
+
+test('all nine layouts stay 9 bytes with matching header and trailer', () => {
+  const cases: Array<[string, number, number]> = [
+    ['LEDBLE-00-1', 0x7e, 0xef],
+    ['LEDDMX-00-1', 0x7b, 0xbf],
+    ['LEDDMX-02-1', 0x7b, 0xbf],
+    ['LEDCAR-01-1', 0x7b, 0xbf],
+    ['LEDCAR-02-1', 0x7b, 0xbf],
+    ['LEDSMART-1', 0x7d, 0xdf],
+    ['LEDSUN-1', 0x7a, 0xaf],
+    ['LEDLIKE-1', 0x70, 0x0f],
+    ['LEDPHO-1', 0x72, 0x2f],
+  ]
+  for (const [name, head, tail] of cases) {
+    for (const frame of [
+      ffe0.power(true, name),
+      ffe0.rgb(1, 2, 3, name),
+      ffe0.brightness(50, name),
+      ffe0.speed(50, name),
+      ffe0.effect({ id: 9, name: 'x' }, name),
+      ffe0.white!(50, name),
+    ]) {
+      assert.equal(frame.length, 9, name)
+      assert.equal(frame[0], head, `${name} header`)
+      assert.equal(frame[8], tail, `${name} trailer`)
+    }
+  }
+})
+
+test('effect tables follow the family', () => {
+  assert.equal(ffe0.effects('LEDLIKE-1').length, 8)
+  assert.equal(ffe0.effects('LEDPHO-1').length, 16)
+  // No table ships for these two, so ids are exposed plainly.
+  assert.equal(ffe0.effects('LEDSMART-1').length, 16)
+  assert.equal(ffe0.effects('LEDSUN-1').length, 16)
 })

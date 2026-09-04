@@ -16,7 +16,10 @@ efeito ou cena de uma vez só.
 | LEDBLE / LEDSTAGE / LEDLIGHT | `FFE0` / `FFE1` | ✅ **validado em hardware** |
 | LEDDMX-00/01/03, LEDCAR-01 | `FFE0` / `FFE1` | ✅ implementado (`7B FF … BF`) |
 | LEDDMX-02/04, LEDCAR-02 | `FFE0` / `FFE1` | ✅ implementado (`7B … BF`, deslocado) |
-| LEDSMART / LEDSUN / LEDLIKE / LEDPHO | `FFE0` / `FFE1` | 📄 documentado, não implementado |
+| LEDSMART | `FFE0` / `FFE1` | ✅ implementado (`7D … DF`) |
+| LEDSUN | `FFE0` / `FFE1` | ✅ implementado (`7A … AF`, só branco/CCT) |
+| LEDLIKE | `FFE0` / `FFE1` | ✅ implementado (`70 … 0F`, só branco/CCT) |
+| LEDPHO | `FFE0` / `FFE1` | ✅ implementado (`72 … 2F`, com endereço de grupo) |
 | BLEDIM / LanQianTech | `FFF0` / **`FFF1`** | ✅ implementado (`55 AA`, tam. variável) |
 
 O driver `ffe0` está **confirmado em hardware**: conexão, handshake `2A` e comando de

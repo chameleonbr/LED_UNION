@@ -543,4 +543,34 @@ export const leddmx: Effect[] = [
   {"id": 210, "name": "Close Curtain Swab Y C P"},
 ]
 
-export default { melk, elk, ledble, ledcar, leddmx }
+export const ledlike: Effect[] = [
+  {"id": 0, "name": "Turn off"},
+  {"id": 1, "name": "Turn on"},
+  {"id": 2, "name": "All bright"},
+  {"id": 3, "name": "Half bright"},
+  {"id": 4, "name": "Slightly bright"},
+  {"id": 5, "name": "breathing"},
+  {"id": 6, "name": "Strobe"},
+  {"id": 7, "name": "Flashing"},
+]
+
+export const ledpho: Effect[] = [
+  {"id": 0, "name": "None"},
+  {"id": 1, "name": "Alarm"},
+  {"id": 2, "name": "Lightning"},
+  {"id": 3, "name": "Flash"},
+  {"id": 4, "name": "Flame"},
+  {"id": 5, "name": "Explode"},
+  {"id": 6, "name": "Candlelight"},
+  {"id": 7, "name": "Get Together"},
+  {"id": 8, "name": "Flicker"},
+  {"id": 9, "name": "Starlight"},
+  {"id": 10, "name": "Fireworks"},
+  {"id": 11, "name": "Short Circuit"},
+  {"id": 12, "name": "Pulse"},
+  {"id": 13, "name": "Music"},
+  {"id": 14, "name": "Rainbow"},
+  {"id": 15, "name": "Breathe"},
+]
+
+export default { melk, elk, ledble, ledcar, leddmx, ledlike, ledpho }

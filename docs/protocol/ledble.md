@@ -140,14 +140,83 @@ byte 3 **e** o valor cru no byte 4.
 
 ## Outras famílias
 
+Verificadas byte a byte contra os `new int[]{…}` do `NetConnectBle`.
+
+### LEDSMART (`7D … DF`)
+
 ```
-LEDSMART  on/off 7D 01 01 <1|0> FF FF FF FF DF   rgb 7D 02 01 FF <r> <g> <b> FF DF
-          brilho 7D 02 02 <v> FF FF FF FF DF     modo 7D 02 05 <m> FF FF FF FF DF
-LEDSUN    on/off 7A 01 <1|0> FF FF FF FF FF AF   brilho 7A 02 <v> …   cct 7A 05 <v> …
-LEDLIKE   on/off 70 01 <1|0> FF FF FF FF FF 0F   brilho 70 02 <v> <f> FF FF FF FF 0F
-LEDPHO    on/off 72 01 <on> <p> FF <a><b><c> 2F  rgb 72 04 <r><g><b><a><b><c> 2F
-          hsi    72 03 <h><s><i><a><b><c> 2F     efeito 72 08 <fx> FF FF … 2F
+power       7D 01 01 <1|0> FF FF FF FF DF
+rgb         7D 02 01 FF <r> <g> <b> FF DF
+brilho      7D 02 02 <v> FF FF FF FF DF
+velocidade  7D 02 04 <v> FF FF FF FF DF
+modo        7D 02 05 <m> FF FF FF FF DF
+dim/branco  7D 02 07 <v> FF FF FF FF DF
+diy         7D 02 03 <i> <r> <g> <b> <qtd> DF
+custom rgb  7D 02 08 <i4> <r> <g> <b> <i5> DF
+consulta    7D 01 05 <i> FF FF FF FF DF
 ```
+
+### LEDSUN (`7A … AF`) — **sem canal RGB**
+
+```
+power       7A 01 <1|0> FF FF FF FF FF AF
+brilho      7A 02 <v> FF FF FF FF FF AF
+velocidade  7A 03 <v> FF FF FF FF FF AF
+cct/warm    7A 05 <v> FF FF FF FF FF AF
+modo        7A 06 <m> FF FF FF FF FF AF
+modo voz    7A 07 <m> FF FF FF FF FF AF
+sensib.     7A 08 <s> FF FF FF FF FF AF
+```
+
+### LEDLIKE (`70 … 0F`) — **sem canal RGB**
+
+```
+power       70 01 <1|0> FF FF FF FF FF 0F
+brilho      70 02 <v> FF FF FF FF FF 0F
+velocidade  70 03 <v> FF FF FF FF FF 0F
+modo        70 FF <m> FF FF FF FF FF 0F
+modo mic    70 04 <m> 00 FF FF FF FF 0F
+modo voz    70 FF <m> 01 FF FF FF FF 0F
+sensib.     70 08 <s> FF FF FF FF FF 0F
+```
+
+Existem dois comandos de modo distintos: o genérico (`70 FF <m>`, usado por
+`setRgbMode`) e o específico do LEDLIKE (`70 04 <m> <flag>`, `setLikeMode`).
+
+### LEDPHO (`72 … 2F`) — com endereço de grupo
+
+Os **três últimos bytes de parâmetro são o endereço de grupo** (`A`, `B`, `C` em
+`MainActivity_PHO`), que começam em `0, 0, 0` — o que atinge todas as luminárias.
+
+```
+power        72 01 <on> <seg> FF <A> <B> <C> 2F
+brilho       72 02 <v> <seg> FF <A> <B> <C> 2F
+hsi          72 03 <h> <s> <i> <A> <B> <C> 2F
+rgb          72 04 <r> <g> <b> <A> <B> <C> 2F
+cct          72 05 <ct> FF FF <A> <B> <C> 2F
+corr. cct    72 06 <v> <v2> FF <A> <B> <C> 2F
+gelatina     72 07 <v> FF FF <A> <B> <C> 2F
+efeito       72 08 <fx> FF FF <A> <B> <C> 2F
+vel. efeito  72 09 <spd> FF FF <A> <B> <C> 2F
+canal        72 0A <v> <v2> FF <A> <B> <C> 2F
+add grupo    72 10 <g> <n> FF FF FF <x> 2F
+del grupo    72 11 <g> FF FF FF FF FF 2F
+consulta     72 12 00 FF FF FF FF FF 2F
+reset grupos 72 14 FF FF FF FF FF FF 2F
+```
+
+### Handshake
+
+O `2A` só é enviado para `LEDBLE`, `LEDDMX` e `LEDCAR`. As outras quatro famílias
+não o recebem no app original.
+
+### Tabelas de efeito destas famílias
+
+| família | arquivo | entradas |
+|---|---|---|
+| LEDLIKE | `like_mode.tsv` | 8 (ids 0..7) |
+| LEDPHO | `pho_mode.tsv` | 16 (ids 0..15) |
+| LEDSMART, LEDSUN | — | nenhuma tabela nos recursos; ids expostos diretamente |
 
 ## Tabelas de efeito
 

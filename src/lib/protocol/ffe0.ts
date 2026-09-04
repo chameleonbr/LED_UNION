@@ -3,29 +3,38 @@ import { byte, pct } from './types.ts'
 import effects from './effects.ts'
 
 // Protocol: docs/protocol/ledble.md
-// Every family in the LED+LAMP app shares one characteristic and differs only in
-// the envelope and the byte layout, selected by the advertised name prefix.
+// Every family in the LED+LAMP app shares one characteristic and differs only in the
+// envelope and the byte layout, selected by the advertised name prefix. Frames are
+// always 9 bytes; only the header, trailer and parameter positions move.
 
 const SERVICE = '0000ffe0-0000-1000-8000-00805f9b34fb'
 const WRITE_CHAR = '0000ffe1-0000-1000-8000-00805f9b34fb'
 
 const DEFAULT_PASSWORD = [0xa1, 0x23, 0x45, 0x67]
+const F = 0xff
 
 const f = (...b: number[]) => new Uint8Array(b)
 
 /**
- * Three wire layouts:
- *  - `ble`   `7E … EF`, the LEDBLE/LEDSTAGE/LEDLIGHT/LEDCAR-00 family
- *  - `dmx`   `7B FF <cmd> … BF`, LEDDMX-00/01/03 and LEDCAR-01
- *  - `dmxs`  `7B <cmd> … BF`, LEDDMX-02/04 and LEDCAR-02 — the `FF` filler is
- *            dropped and every parameter shifts one byte left
+ * Seven wire layouts:
+ *  - `ble`   `7E … EF`  LEDBLE, LEDSTAGE, LEDLIGHT, LEDCAR-00
+ *  - `dmx`   `7B FF …`  LEDDMX-00/01/03, LEDCAR-01
+ *  - `dmxs`  `7B …`     LEDDMX-02/04, LEDCAR-02 — no `FF` filler, params shift left
+ *  - `smart` `7D … DF`  LEDSMART
+ *  - `sun`   `7A … AF`  LEDSUN
+ *  - `like`  `70 … 0F`  LEDLIKE
+ *  - `pho`   `72 … 2F`  LEDPHO — carries a group address in the last three params
  *
- * LEDCAR-01 is dual-protocol in the original app (a runtime flag picks `7E` or
- * `7B`); we default it to `dmx`, which is what the DMX-capable hardware expects.
+ * LEDCAR-01 is dual-protocol in the original app (a runtime flag picks `7E` or `7B`);
+ * we default it to `dmx`, which is what the DMX-capable hardware expects.
  */
-type Layout = 'ble' | 'dmx' | 'dmxs'
+export type Layout = 'ble' | 'dmx' | 'dmxs' | 'smart' | 'sun' | 'like' | 'pho'
 
 export function layoutFor(name: string): Layout {
+  if (/^LEDSMART/i.test(name)) return 'smart'
+  if (/^LEDSUN/i.test(name)) return 'sun'
+  if (/^LEDLIKE/i.test(name)) return 'like'
+  if (/^LEDPHO/i.test(name)) return 'pho'
   if (/^(LEDDMX-0[24]|LEDCAR-02)/i.test(name)) return 'dmxs'
   if (/^(LEDDMX|LEDCAR-01)/i.test(name)) return 'dmx'
   return 'ble'
@@ -33,6 +42,17 @@ export function layoutFor(name: string): Layout {
 
 // LEDSTAGE and LEDLIGHT use a different power frame than the rest of the 7E family.
 const isStage = (name: string) => /^(LEDSTAGE|LEDLIGHT)/i.test(name)
+
+/**
+ * LEDPHO addresses a group with three trailing bytes. The app leaves them at zero
+ * until the user builds a group, and zero reaches every fixture.
+ */
+const PHO_GROUP = [0, 0, 0]
+/** Second parameter of the LEDPHO power and brightness frames: fixture segment. */
+const PHO_SEGMENT = 0
+
+/** The `7B FF` family sends brightness twice: scaled to 0..32, then raw. */
+const scale32 = (v: number) => Math.round((pct(v) * 32) / 100)
 
 /**
  * The controller ignores every command until it gets this frame. The original app
@@ -50,14 +70,17 @@ export function authFrame(now = new Date(), password = DEFAULT_PASSWORD): Uint8A
 
 /** Asks the controller to report password status. Also what enables notifications. */
 export const passwordQueryFrame = () =>
-  f(0x2a, 0x05, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xaf)
+  f(0x2a, 0x05, F, F, F, F, F, F, 0xaf)
 
-/** The `7B FF` family sends brightness twice: scaled to 0..32, then raw. */
-const scale32 = (v: number) => Math.round((pct(v) * 32) / 100)
+/** Families whose hardware has no colour channel at all — white and CCT only. */
+const WHITE_ONLY: Layout[] = ['sun', 'like']
+
+/** Only these families are known to accept the `2A` handshake. */
+const NEEDS_AUTH = /^(LEDBLE|LEDDMX|LEDCAR|LED[_ ]BLE)/i
 
 export const ffe0: Driver = {
   id: 'ffe0',
-  label: 'LEDBLE / LEDDMX / LEDCAR',
+  label: 'LEDBLE / DMX / CAR / SMART / SUN / LIKE / PHO',
   service: SERVICE,
   writeChar: WRITE_CHAR,
   minGapMs: 50,
@@ -65,36 +88,64 @@ export const ffe0: Driver = {
 
   // Names in the wild use both LEDBLE-xx and LED_BLE_xx.
   matches: (name) =>
-    /^(LED[_ ]?BLE|LEDSTAGE|LEDLIGHT|LEDDMX|LEDCAR)/i.test(name),
+    /^(LED[_ ]?BLE|LEDSTAGE|LEDLIGHT|LEDDMX|LEDCAR|LEDSMART|LEDSUN|LEDLIKE|LEDPHO)/i
+      .test(name),
 
-  caps: (name): Caps => ({
-    rgb: true,
-    white: layoutFor(name) === 'dmxs',
-    cct: layoutFor(name) !== 'dmx',
-    speed: true,
-    effects: true,
-    scenes: false,
-  }),
-
-  effects(name): Effect[] {
-    if (/^LEDDMX/i.test(name)) return effects.leddmx
-    if (/^LEDCAR/i.test(name)) return effects.ledcar
-    return effects.ledble
+  caps(name): Caps {
+    const l = layoutFor(name)
+    return {
+      rgb: !WHITE_ONLY.includes(l),
+      white: l === 'dmxs' || l === 'smart',
+      cct: l === 'sun' || l === 'pho' || l === 'dmxs' || l === 'ble',
+      speed: true,
+      effects: true,
+      scenes: false,
+    }
   },
 
-  onConnect: (_name, now) => [authFrame(now)],
+  effects(name): Effect[] {
+    // LEDCAR ships its own table, and keeps it even on the variants that speak the
+    // 7B envelope.
+    if (/^LEDCAR/i.test(name)) return effects.ledcar
+    switch (layoutFor(name)) {
+      case 'dmx':
+      case 'dmxs':
+        return effects.leddmx
+      case 'like':
+        return effects.ledlike
+      case 'pho':
+        return effects.ledpho
+      case 'smart':
+      case 'sun':
+        // No name table ships in the app's resources for these two, but the mode
+        // command exists, so expose the ids plainly rather than hiding the feature.
+        return Array.from({ length: 16 }, (_, i) => ({ id: i, name: `Modo ${i + 1}` }))
+      default:
+        return effects.ledble
+    }
+  },
+
+  onConnect: (name, now) => (NEEDS_AUTH.test(name) ? [authFrame(now)] : []),
 
   power(on, name, ch) {
     const v = on ? 0x01 : 0x00
     switch (layoutFor(name)) {
       case 'dmxs':
-        return f(0x7b, 0x04, v, 0xff, 0xff, 0xff, 0xff, 0xff, 0xbf)
+        return f(0x7b, 0x04, v, F, F, F, F, F, 0xbf)
       case 'dmx':
-        return f(0x7b, 0x04, 0x04, v, 0xff, 0xff, 0xff, 0xff, 0xbf)
+        return f(0x7b, 0x04, 0x04, v, F, F, F, F, 0xbf)
+      case 'smart':
+        return f(0x7d, 0x01, 0x01, v, F, F, F, F, 0xdf)
+      case 'sun':
+        return f(0x7a, 0x01, v, F, F, F, F, F, 0xaf)
+      case 'like':
+        return f(0x70, 0x01, v, F, F, F, F, F, 0x0f)
+      case 'pho':
+        return f(0x72, 0x01, v, PHO_SEGMENT, F, ...PHO_GROUP, 0x2f)
       default:
         return isStage(name)
-          ? f(0x7e, 0xff, 0x04, v, 0xff, 0xff, 0xff, 0xff, 0xef)
-          : f(0x7e, 0xff, 0x04, v, 0x00, 0xff, 0xff, ch ?? 0x00, 0xef)
+          ? f(0x7e, F, 0x04, v, F, F, F, F, 0xef)
+          : f(0x7e, F, 0x04, v, 0x00, F, F, ch ?? 0x00, 0xef)
     }
   },
 
@@ -103,11 +154,19 @@ export const ffe0: Driver = {
     switch (layoutFor(name)) {
       case 'dmxs':
         // Byte 6 is the white channel; 0 keeps it out of the mix.
-        return f(0x7b, 0x07, R, G, B, 0x00, 0xff, 0xff, 0xbf)
+        return f(0x7b, 0x07, R, G, B, 0x00, F, F, 0xbf)
       case 'dmx':
-        return f(0x7b, 0xff, 0x07, R, G, B, 0x00, 0xff, 0xbf)
+        return f(0x7b, F, 0x07, R, G, B, 0x00, F, 0xbf)
+      case 'smart':
+        return f(0x7d, 0x02, 0x01, F, R, G, B, F, 0xdf)
+      case 'pho':
+        return f(0x72, 0x04, R, G, B, ...PHO_GROUP, 0x2f)
+      case 'sun':
+      case 'like':
+        // White-only hardware: fall back to driving the white channel by luminance.
+        return ffe0.white!(Math.round(((R + G + B) / 3 / 255) * 100), name)
       default:
-        return f(0x7e, 0xff, 0x05, 0x03, R, G, B, ch ?? 0xff, 0xef)
+        return f(0x7e, F, 0x05, 0x03, R, G, B, ch ?? F, 0xef)
     }
   },
 
@@ -115,11 +174,19 @@ export const ffe0: Driver = {
     const b = pct(v)
     switch (layoutFor(name)) {
       case 'dmxs':
-        return f(0x7b, 0x01, b, 0x00, 0xff, 0xff, 0xff, 0xff, 0xbf)
+        return f(0x7b, 0x01, b, 0x00, F, F, F, F, 0xbf)
       case 'dmx':
-        return f(0x7b, 0xff, 0x01, scale32(b), b, 0x00, 0xff, 0xff, 0xbf)
+        return f(0x7b, F, 0x01, scale32(b), b, 0x00, F, F, 0xbf)
+      case 'smart':
+        return f(0x7d, 0x02, 0x02, b, F, F, F, F, 0xdf)
+      case 'sun':
+        return f(0x7a, 0x02, b, F, F, F, F, F, 0xaf)
+      case 'like':
+        return f(0x70, 0x02, b, F, F, F, F, F, 0x0f)
+      case 'pho':
+        return f(0x72, 0x02, b, PHO_SEGMENT, F, ...PHO_GROUP, 0x2f)
       default:
-        return f(0x7e, 0xff, 0x01, b, 0x00, 0xff, 0xff, ch ?? 0xff, 0xef)
+        return f(0x7e, F, 0x01, b, 0x00, F, F, ch ?? F, 0xef)
     }
   },
 
@@ -127,11 +194,19 @@ export const ffe0: Driver = {
     const s = pct(v)
     switch (layoutFor(name)) {
       case 'dmxs':
-        return f(0x7b, 0x02, s, 0x00, 0xff, 0xff, 0xff, 0xff, 0xbf)
+        return f(0x7b, 0x02, s, 0x00, F, F, F, F, 0xbf)
       case 'dmx':
-        return f(0x7b, 0xff, 0x02, s, 0xff, 0x00, 0xff, 0xff, 0xbf)
+        return f(0x7b, F, 0x02, s, F, 0x00, F, F, 0xbf)
+      case 'smart':
+        return f(0x7d, 0x02, 0x04, s, F, F, F, F, 0xdf)
+      case 'sun':
+        return f(0x7a, 0x03, s, F, F, F, F, F, 0xaf)
+      case 'like':
+        return f(0x70, 0x03, s, F, F, F, F, F, 0x0f)
+      case 'pho':
+        return f(0x72, 0x09, s, F, F, ...PHO_GROUP, 0x2f)
       default:
-        return f(0x7e, 0xff, 0x02, s, 0x00, 0xff, 0xff, ch ?? 0xff, 0xef)
+        return f(0x7e, F, 0x02, s, 0x00, F, F, ch ?? F, 0xef)
     }
   },
 
@@ -139,26 +214,55 @@ export const ffe0: Driver = {
     const id = byte(e.id)
     switch (layoutFor(name)) {
       case 'dmxs':
-        return f(0x7b, 0x13, id, 0xff, 0xff, 0xff, 0xff, 0xff, 0xbf)
+        return f(0x7b, 0x13, id, F, F, F, F, F, 0xbf)
       case 'dmx':
-        return f(0x7b, 0xff, 0x13, id, 0xff, 0xff, 0xff, 0xff, 0xbf)
+        return f(0x7b, F, 0x13, id, F, F, F, F, 0xbf)
+      case 'smart':
+        return f(0x7d, 0x02, 0x05, id, F, F, F, F, 0xdf)
+      case 'sun':
+        return f(0x7a, 0x06, id, F, F, F, F, F, 0xaf)
+      case 'like':
+        return f(0x70, F, id, F, F, F, F, F, 0x0f)
+      case 'pho':
+        return f(0x72, 0x08, id, F, F, ...PHO_GROUP, 0x2f)
       default:
-        return f(0x7e, 0x00, 0x0e, id, 0xff, 0xff, 0xff, ch ?? 0xff, 0xef)
+        return f(0x7e, 0x00, 0x0e, id, F, F, F, ch ?? F, 0xef)
     }
   },
 
   white(v, name) {
-    // Only the shifted DMX layout carries a dedicated white byte in the rgb frame.
-    if (layoutFor(name) === 'dmxs') {
-      return f(0x7b, 0x07, 0x00, 0x00, 0x00, pct(v), 0xff, 0xff, 0xbf)
+    const w = pct(v)
+    switch (layoutFor(name)) {
+      case 'dmxs':
+        return f(0x7b, 0x07, 0x00, 0x00, 0x00, w, F, F, 0xbf)
+      case 'dmx':
+        // Same double-encoding as brightness: scaled to 0..32, then raw.
+        return f(0x7b, F, 0x09, scale32(w), w, F, F, F, 0xbf)
+      case 'smart':
+        // The app calls this "dim" — the separate white/dimming channel.
+        return f(0x7d, 0x02, 0x07, w, F, F, F, F, 0xdf)
+      case 'sun':
+        return f(0x7a, 0x02, w, F, F, F, F, F, 0xaf)
+      case 'like':
+        return f(0x70, 0x02, w, F, F, F, F, F, 0x0f)
+      case 'pho':
+        // No separate white channel on this fixture — warm the colour temperature.
+        return f(0x72, 0x05, w, F, F, ...PHO_GROUP, 0x2f)
+      default:
+        return f(0x7e, F, 0x05, 0x01, w, F, F, F, 0xef)
     }
-    return f(0x7e, 0xff, 0x05, 0x01, pct(v), 0xff, 0xff, 0xff, 0xef)
   },
 
   cct(warm, cool, name) {
-    if (layoutFor(name) === 'dmxs') {
-      return f(0x7b, 0x0a, pct(cool), 0xff, 0xff, 0xff, 0xff, 0xff, 0xbf)
+    switch (layoutFor(name)) {
+      case 'dmxs':
+        return f(0x7b, 0x0a, pct(cool), F, F, F, F, F, 0xbf)
+      case 'sun':
+        return f(0x7a, 0x05, pct(warm), F, F, F, F, F, 0xaf)
+      case 'pho':
+        return f(0x72, 0x05, pct(warm), F, F, ...PHO_GROUP, 0x2f)
+      default:
+        return f(0x7e, F, 0x05, 0x02, pct(warm), pct(cool), F, F, 0xef)
     }
-    return f(0x7e, 0xff, 0x05, 0x02, pct(warm), pct(cool), 0xff, 0xff, 0xef)
   },
 }
