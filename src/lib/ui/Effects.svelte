@@ -2,8 +2,7 @@
   import { apply, selection, targets, sendRaw } from '../ble.svelte.ts'
   import type { Effect } from '../protocol/index.ts'
   import {
-    isAddressable, chipModels, rgbOrdersFor, spiConfigFrame, chipModelFrame,
-    directionFrame,
+    isAddressable, rgbOrdersFor, spiConfigFrame, directionFrame,
   } from '../protocol/ffe0.ts'
   import { store, setStrip } from '../store.svelte.ts'
 
@@ -38,14 +37,12 @@
   const saved = $derived(store.devices.find((d) => d.id === lead?.id)?.strip)
 
   let showStrip = $state(false)
-  let chip = $state(1)
   let pixels = $state(60)
   let order = $state(1)
   let stripMsg = $state('')
 
   $effect(() => {
     if (saved) {
-      chip = saved.chip
       pixels = saved.pixels
       order = saved.order
     }
@@ -57,8 +54,7 @@
     if (!lead) return
     stripMsg = ''
     try {
-      const cfg = { chip, pixels, order }
-      await sendRaw(lead.id, chipModelFrame(lead.name, chip))
+      const cfg = { pixels, order }
       await sendRaw(lead.id, spiConfigFrame(lead.name, cfg))
       setStrip(lead.id, cfg)
       stripMsg = 'Enviado e salvo'
@@ -66,6 +62,20 @@
       stripMsg = e instanceof Error ? e.message : String(e)
     }
   }
+
+  // --- sound reactive ------------------------------------------------------------
+  const hasSound = $derived(!!lead?.driver.soundMode || !!lead?.driver.soundEnable)
+  let showSound = $state(false)
+  let source = $state<'mic' | 'music'>('mic')
+  let sensitivity = $state(50)
+  let soundModeId = $state(0)
+
+  const sendSoundMode = () =>
+    apply((d, name, ch) => d.soundMode?.(soundModeId, name, source, ch))
+  const sendSensitivity = () =>
+    apply((d, name) => d.soundSensitivity?.(sensitivity, name), 'sens')
+  const sendSoundEnable = (on: boolean) =>
+    apply((d, name) => d.soundEnable?.(on, name))
 
   async function setDirection(forward: boolean) {
     if (!lead) return
@@ -87,6 +97,57 @@
       <input type="range" min="0" max="100" bind:value={speed} oninput={sendSpeed} />
     </label>
 
+    {#if hasSound}
+      <div class="card col">
+        <button class="ghost row spread" onclick={() => (showSound = !showSound)}>
+          <span>Reagir ao som — {source === 'mic' ? 'microfone' : 'música do celular'}</span>
+          <span class="muted">{showSound ? '▲' : '▼'}</span>
+        </button>
+
+        {#if showSound}
+          {#if lead?.driver.soundEnable}
+            <div class="row">
+              <button class="primary grow" onclick={() => sendSoundEnable(true)}>
+                Ligar microfone
+              </button>
+              <button class="grow" onclick={() => sendSoundEnable(false)}>Desligar</button>
+            </div>
+          {/if}
+
+          {#if lead?.driver.soundMode}
+            <div class="row">
+              <button class="grow" class:primary={source === 'mic'}
+                      onclick={() => { source = 'mic'; sendSoundMode() }}>
+                Microfone
+              </button>
+              <button class="grow" class:primary={source === 'music'}
+                      onclick={() => { source = 'music'; sendSoundMode() }}>
+                Música
+              </button>
+            </div>
+            <label class="field">
+              <span>Modo — {soundModeId}</span>
+              <input type="range" min="0" max="15" bind:value={soundModeId}
+                     onchange={sendSoundMode} />
+            </label>
+          {/if}
+
+          {#if lead?.driver.soundSensitivity}
+            <label class="field">
+              <span>Sensibilidade — {sensitivity}%</span>
+              <input type="range" min="0" max="100" bind:value={sensitivity}
+                     oninput={sendSensitivity} />
+            </label>
+          {/if}
+
+          <div class="small muted">
+            Microfone é o do próprio controlador. "Música" muda o modo no aparelho, mas
+            transmitir o áudio do celular ainda não está implementado.
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     {#if addressable}
       <div class="card col">
         <button class="ghost row spread" onclick={() => (showStrip = !showStrip)}>
@@ -106,13 +167,6 @@
             <span>Ordem dos canais</span>
             <select class="sel" bind:value={order}>
               {#each orders as o}<option value={o.id}>{o.name}</option>{/each}
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Chip da fita</span>
-            <select class="sel" bind:value={chip}>
-              {#each chipModels as c}<option value={c.id}>{c.name}</option>{/each}
             </select>
           </label>
 

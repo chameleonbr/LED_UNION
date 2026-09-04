@@ -33,8 +33,6 @@ def main():
         ("ledpho", [{"id": int(r["id"]), "name": r["name"]}
                     for r in tsv("pho_mode.tsv", ["id", "name"])]),
         # Addressable-strip wiring options, not effects, but the same id/name shape.
-        ("chipModels", [{"id": int(r["id"]), "name": r["name"]}
-                        for r in tsv("chip_model.tsv", ["id", "name"])]),
         ("rgbOrders", [{"id": int(r["id"]), "name": r["name"]}
                        for r in tsv("rgb_order.tsv", ["id", "name"])]),
         ("rgbOrdersDmx02", [{"id": int(r["id"]), "name": r["name"]}

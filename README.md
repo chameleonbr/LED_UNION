@@ -82,6 +82,15 @@ o sintoma difícil de diagnosticar.
 
 A configuração fica salva por aparelho.
 
+## Reagir ao som
+
+Na aba **Efeitos**, o painel **Reagir ao som** liga o microfone do próprio
+controlador e ajusta a sensibilidade. As três famílias suportam.
+
+Alternar para o modo "música" muda o modo no aparelho, mas **transmitir o áudio do
+celular não está implementado** — exigiria capturar PCM e enviá-lo por BLE
+continuamente.
+
 ## Protocolo
 
 Ver `docs/protocol/`. Resumo do que é fácil errar:

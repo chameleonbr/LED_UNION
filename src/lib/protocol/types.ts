@@ -9,6 +9,9 @@ export type Caps = {
 
 export type Effect = { id: number; name: string; group?: string }
 
+/** Where the sound comes from: the controller's own mic, or audio from the phone. */
+export type SoundSource = 'mic' | 'music'
+
 /**
  * One protocol family. Frames are built pure — no I/O here, so every builder is
  * unit-testable against the byte templates in docs/protocol/.
@@ -48,6 +51,17 @@ export type Driver = {
   writeWithResponse?: boolean
   /** Outputs this controller exposes, when the count is fixed by the protocol. */
   channelValues?: number[]
+
+  /**
+   * Sound-reactive control. `mic` is the controller's own microphone; `music` is the
+   * phone streaming its audio, which most families encode as the same command with a
+   * different flag. Not every family offers all three calls.
+   */
+  soundMode?(mode: number, name: string, source: SoundSource, ch?: number): Uint8Array
+  /** Explicit on/off, for families that separate enabling from picking a mode. */
+  soundEnable?(on: boolean, name: string): Uint8Array
+  /** Microphone sensitivity, 0..100. */
+  soundSensitivity?(pct: number, name: string): Uint8Array
   /** pct 0..100 */
   white?(pct: number, name: string): Uint8Array
   /** warm/cool 0..100 */

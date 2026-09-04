@@ -1,4 +1,4 @@
-import type { Caps, Driver, Effect } from './types.ts'
+import type { Caps, Driver, Effect, SoundSource } from './types.ts'
 import { byte, pct } from './types.ts'
 import effects from './effects.ts'
 
@@ -44,6 +44,8 @@ export function layoutFor(name: string): Layout {
 const isStage = (name: string) => /^(LEDSTAGE|LEDLIGHT)/i.test(name)
 // LEDCAR-01 shares the 7B FF layout with LEDDMX but has its own power frame.
 const isCar01 = (name: string) => /^LEDCAR-01/i.test(name)
+// LEDCAR-02 shares the shifted layout with LEDDMX-02/04 but differs on some flags.
+const isCar02 = (name: string) => /^LEDCAR-02/i.test(name)
 
 /**
  * LEDPHO addresses a group with three trailing bytes. The app leaves them at zero
@@ -217,10 +219,12 @@ export const ffe0: Driver = {
   effect(e, name, ch) {
     const id = byte(e.id)
     switch (layoutFor(name)) {
+      // 0x03 selects a built-in mode; 0x13 is the user's DIY patterns. Feeding the
+      // built-in table's ids to 0x13 was a bug.
       case 'dmxs':
-        return f(0x7b, 0x13, id, F, F, F, F, F, 0xbf)
+        return f(0x7b, 0x03, id, F, F, F, F, F, 0xbf)
       case 'dmx':
-        return f(0x7b, F, 0x13, id, F, F, F, F, 0xbf)
+        return f(0x7b, F, 0x03, id, F, F, F, F, 0xbf)
       case 'smart':
         return f(0x7d, 0x02, 0x05, id, F, F, F, F, 0xdf)
       case 'sun':
@@ -258,6 +262,54 @@ export const ffe0: Driver = {
     }
   },
 
+  /**
+   * Most families use one opcode for both sound sources and a flag byte to pick
+   * between them: the controller's own mic, or audio streamed from the phone.
+   */
+  soundMode(mode, name, source, ch) {
+    const m = byte(mode)
+    const music = source === 'music'
+    switch (layoutFor(name)) {
+      case 'dmxs':
+        // No phone-audio variant exists here: the app only ever sends the mic mode,
+        // and the flag byte differs between LEDCAR-02 and LEDDMX-02/04.
+        return isCar02(name)
+          ? f(0x7b, 0x0b, m, 0x00, F, F, F, F, 0xbf)
+          : f(0x7b, 0x0b, m, F, F, F, F, F, 0xbf)
+      case 'dmx':
+        return f(0x7b, F, 0x0b, m, music ? 0x01 : 0x00, F, F, F, 0xbf)
+      case 'like':
+        return music
+          ? f(0x70, 0x04, m, 0x00, F, F, F, F, 0x0f)
+          : f(0x70, F, m, 0x01, F, F, F, F, 0x0f)
+      case 'sun':
+        return f(0x7a, 0x07, m, F, F, F, F, F, 0xaf)
+      case 'smart':
+        return f(0x7d, 0x02, 0x05, m, F, F, F, F, 0xdf)
+      case 'pho':
+        return f(0x72, 0x08, m, F, F, ...PHO_GROUP, 0x2f)
+      default:
+        // Byte 1 is the source: 0 = microphone, 2 = phone audio.
+        return f(0x7e, music ? 0x02 : 0x00, 0x0e, m, F, F, F, ch ?? F, 0xef)
+    }
+  },
+
+  soundSensitivity(v, name) {
+    const s = pct(v)
+    switch (layoutFor(name)) {
+      case 'dmxs':
+        return f(0x7b, 0x0c, s, F, F, F, F, F, 0xbf)
+      case 'dmx':
+        return f(0x7b, F, 0x0c, s, 0x00, F, F, F, 0xbf)
+      case 'sun':
+        return f(0x7a, 0x08, s, F, F, F, F, F, 0xaf)
+      case 'like':
+        return f(0x70, 0x08, s, F, F, F, F, F, 0x0f)
+      default:
+        return f(0x7e, F, 0x07, s, F, F, F, F, 0xef)
+    }
+  },
+
   cct(warm, cool, name) {
     switch (layoutFor(name)) {
       case 'dmxs':
@@ -287,9 +339,6 @@ export const isAddressable = (name: string) => {
   return l === 'dmx' || l === 'dmxs'
 }
 
-/** Driver ICs the app offers: 1 = UCS512A, 2 = UCS512C. */
-export const chipModels = effects.chipModels
-
 /** Channel orders. The shifted layouts only offer the six RGB permutations. */
 export const rgbOrdersFor = (name: string) =>
   layoutFor(name) === 'dmxs' ? effects.rgbOrdersDmx02 : effects.rgbOrders
@@ -298,12 +347,16 @@ export const rgbOrdersFor = (name: string) =>
  * Tell the controller how the strip is wired.
  *
  * `pixels` is sent big-endian across two bytes. Note the shifted layout reorders the
- * parameters — the channel order comes first there, and it carries no chip field.
- * LEDCAR-01 pins the chip type to 4.
+ * parameters — the channel order comes first there, and it carries no type field.
+ *
+ * The app hard-codes the type byte to 4 and never exposes it, so we do the same
+ * rather than offering a control we cannot justify.
  */
+const BANNER_TYPE = 0x04
+
 export function spiConfigFrame(
   name: string,
-  opts: { chip: number; pixels: number; order: number },
+  opts: { pixels: number; order: number },
 ): Uint8Array {
   const hi = (opts.pixels >> 8) & 0xff
   const lo = opts.pixels & 0xff
@@ -311,15 +364,7 @@ export function spiConfigFrame(
   if (layoutFor(name) === 'dmxs') {
     return f(0x7b, 0x05, order, hi, lo, F, F, F, 0xbf)
   }
-  const chip = isCar01(name) ? 0x04 : byte(opts.chip)
-  return f(0x7b, F, 0x05, chip, hi, lo, order, F, 0xbf)
-}
-
-/** Select the strip's driver IC. */
-export function chipModelFrame(name: string, model: number): Uint8Array {
-  return layoutFor(name) === 'dmxs'
-    ? f(0x7b, 0x03, byte(model), F, F, F, F, F, 0xbf)
-    : f(0x7b, F, 0x03, byte(model), F, F, F, F, 0xbf)
+  return f(0x7b, F, 0x05, BANNER_TYPE, hi, lo, order, F, 0xbf)
 }
 
 /** Which end of the strip effects run from. */

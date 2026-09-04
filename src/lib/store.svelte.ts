@@ -18,8 +18,6 @@ export type SavedDevice = {
 
 /** How an addressable strip is physically wired. */
 export type StripConfig = {
-  /** Driver IC: 1 = UCS512A, 2 = UCS512C. */
-  chip: number
   /** Number of addressable pixels. */
   pixels: number
   /** Channel order id, from the rgb_order table. */

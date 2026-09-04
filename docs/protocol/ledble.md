@@ -205,6 +205,38 @@ consulta     72 12 00 FF FF FF FF FF 2F
 reset grupos 72 14 FF FF FF FF FF FF 2F
 ```
 
+## Modo reativo a som
+
+Duas fontes distintas, e a maioria das famílias usa **o mesmo opcode com um byte de
+flag** para escolher entre elas:
+
+| família | microfone do controlador | áudio do celular |
+|---|---|---|
+| LEDBLE / LEDCAR-00 | `7E 00 0E <m> FF FF FF FF EF` | `7E 02 0E <m> FF FF FF FF EF` |
+| LEDDMX / LEDCAR-01 | `7B FF 0B <m> 00 FF FF FF BF` | `7B FF 0B <m> 01 FF FF FF BF` |
+| LEDLIKE | `70 FF <m> 01 FF FF FF FF 0F` | `70 04 <m> 00 FF FF FF FF 0F` |
+| LEDSUN | `7A 07 <m> FF FF FF FF FF AF` | — |
+| LEDDMX-02/04 | `7B 0B <m> FF FF FF FF FF BF` | — |
+| LEDCAR-02 | `7B 0B <m> 00 FF FF FF FF BF` | — |
+
+Repare que o **LEDLIKE inverte** qual opcode carrega qual fonte, e que o layout
+deslocado **não tem variante de música** — só o modo de microfone, com byte de flag
+diferente entre LEDCAR-02 e LEDDMX-02/04.
+
+Sensibilidade:
+
+```
+LEDBLE      7E FF 07 <s> FF FF FF FF EF
+LEDDMX      7B FF 0C <s> 00 FF FF FF BF
+LEDDMX-02   7B 0C <s> FF FF FF FF FF BF
+LEDSUN      7A 08 <s> FF FF FF FF FF AF
+LEDLIKE     70 08 <s> FF FF FF FF FF 0F
+```
+
+O **streaming do áudio do celular** (`sendAudioBuf`) não está implementado: exigiria
+capturar PCM e mandar por BLE continuamente. Mudar para o modo "música" no aparelho
+funciona; quem alimenta o áudio é outra história.
+
 ## Fitas endereçáveis (SPI / pixel)
 
 As famílias **LEDDMX** e **LEDCAR** controlam fitas de LED endereçáveis. Os efeitos
@@ -212,12 +244,18 @@ embutidos só renderizam corretamente depois que o controlador sabe como a fita 
 fisicamente ligada. Errar isso não dá erro: dá cor trocada ou meia fita acesa.
 
 ```
-config    7B FF 05 <chip> <pixHi> <pixLo> <ordem> FF BF     (DMX-00/03)
-          7B FF 05 04    <pixHi> <pixLo> <ordem> FF BF      (CAR-01, chip fixo em 4)
-          7B 05 <ordem> <pixHi> <pixLo> FF FF FF BF         (DMX-02/04, CAR-02)
-chip      7B FF 03 <m> FF FF FF FF BF   /  7B 03 <m> FF FF FF FF FF BF
+config    7B FF 05 04 <pixHi> <pixLo> <ordem> FF BF      (DMX-00/03, CAR-01)
+          7B 05 <ordem> <pixHi> <pixLo> FF FF FF BF      (DMX-02/04, CAR-02)
 sentido   7B FF 0D <d> FF FF FF FF BF   /  7B 0D <d> FF FF FF FF FF BF
 ```
+
+O primeiro byte de parâmetro (`bannerType`) é **fixo em 4** no app — o
+`ChipSelectActivity` nunca o expõe ao usuário.
+
+⚠️ **Cuidado com o `setSPIModel`**: apesar do nome, ele **não** seleciona chip. É
+chamado pelo seletor de modo (`seekBarMode`, `listNubmer`) e emite `7B FF 03 <id>` —
+ou seja, é o comando de **efeito embutido** dessas famílias. O `0x13`, que parece o
+equivalente, é o de padrões **DIY** do usuário.
 
 A contagem de pixels é **big-endian** em dois bytes. Repare que o layout deslocado
 **reordena os parâmetros** — a ordem de canais vem primeiro e não há campo de chip.
@@ -231,7 +269,6 @@ setConfigSPI(bannerType, (byte)(bannerPix >> 8), (byte)bannerPix, bannerSort)
 
 | tabela | arquivo | valores |
 |---|---|---|
-| chip | `chip_model.tsv` | 1 = UCS512A, 2 = UCS512C |
 | ordem dos canais | `rgb_order.tsv` | 12: RGB, RBG, GRB, GBR, BRG, BGR + as quatro variantes W |
 | ordem (deslocado) | `rgb_order_dmx02.tsv` | 6: só as permutações RGB |
 

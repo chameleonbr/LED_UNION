@@ -54,6 +54,10 @@ function framesFor(d: Driver, name: string): Row[] {
   add('cct', d.cct?.(30, 70, name))
   const fx = d.effects(name)[0]
   if (fx) add('effect', d.effect(fx, name))
+  add('sound_mic', d.soundMode?.(3, name, 'mic'))
+  add('sound_music', d.soundMode?.(3, name, 'music'))
+  add('sound_on', d.soundEnable?.(true, name))
+  add('sound_sens', d.soundSensitivity?.(PCTV, name))
   for (const ch of [0, 1, 2]) {
     if (!d.hasChannels) break
     add(`rgb_ch${ch}`, d.rgb(R, G, B, name, ch))

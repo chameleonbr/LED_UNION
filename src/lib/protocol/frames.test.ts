@@ -174,7 +174,8 @@ test('LEDDMX 7B FF frames match docs/protocol/ledble.md', () => {
   assert.equal(hex(ffe0.power(false, n)), '7b 04 04 00 ff ff ff ff bf')
   assert.equal(hex(ffe0.rgb(255, 0, 0, n)), '7b ff 07 ff 00 00 00 ff bf')
   assert.equal(hex(ffe0.speed(50, n)), '7b ff 02 32 ff 00 ff ff bf')
-  assert.equal(hex(ffe0.effect({ id: 7, name: 'x' }, n)), '7b ff 13 07 ff ff ff ff bf')
+  // 0x03 is the built-in mode selector; 0x13 would be the DIY patterns.
+  assert.equal(hex(ffe0.effect({ id: 7, name: 'x' }, n)), '7b ff 03 07 ff ff ff ff bf')
   // This family sends brightness twice: scaled to 0..32, then raw.
   assert.equal(hex(ffe0.brightness(100, n)), '7b ff 01 20 64 00 ff ff bf')
   assert.equal(hex(ffe0.brightness(50, n)), '7b ff 01 10 32 00 ff ff bf')
@@ -187,7 +188,7 @@ test('LEDDMX-02 and LEDCAR-02 shift every parameter one byte left', () => {
   assert.equal(hex(ffe0.rgb(255, 0, 0, n)), '7b 07 ff 00 00 00 ff ff bf')
   assert.equal(hex(ffe0.brightness(50, n)), '7b 01 32 00 ff ff ff ff bf')
   assert.equal(hex(ffe0.speed(50, n)), '7b 02 32 00 ff ff ff ff bf')
-  assert.equal(hex(ffe0.effect({ id: 7, name: 'x' }, n)), '7b 13 07 ff ff ff ff ff bf')
+  assert.equal(hex(ffe0.effect({ id: 7, name: 'x' }, n)), '7b 03 07 ff ff ff ff ff bf')
   assert.equal(hex(ffe0.cct!(30, 70, n)), '7b 0a 46 ff ff ff ff ff bf')
   // Dedicated dim opcode, confirmed against the app's own setDim branch.
   assert.equal(hex(ffe0.white!(75, n)), '7b 09 4b ff ff ff ff ff bf')
@@ -475,7 +476,7 @@ test('bledim speed and brightness are remembered per device, not globally', asyn
 })
 
 test('addressable strip configuration matches the app', async () => {
-  const { spiConfigFrame, chipModelFrame, directionFrame, isAddressable, rgbOrdersFor } =
+  const { spiConfigFrame, directionFrame, isAddressable, rgbOrdersFor } =
     await import('./ffe0.ts')
 
   assert.equal(isAddressable('LEDDMX-00-1'), true)
@@ -483,24 +484,22 @@ test('addressable strip configuration matches the app', async () => {
   assert.equal(isAddressable('LEDBLE-00-1'), false)
   assert.equal(isAddressable('LEDSMART-1'), false)
 
-  // 7B FF 05 <chip> <pixHi> <pixLo> <order> FF BF — pixel count is big-endian.
+  // 7B FF 05 <type> <pixHi> <pixLo> <order> FF BF — pixel count is big-endian, and
+  // the app pins the type byte to 4.
   assert.equal(
-    hex(spiConfigFrame('LEDDMX-00-1', { chip: 2, pixels: 300, order: 3 })),
-    '7b ff 05 02 01 2c 03 ff bf',
+    hex(spiConfigFrame('LEDDMX-00-1', { pixels: 300, order: 3 })),
+    '7b ff 05 04 01 2c 03 ff bf',
   )
-  // LEDCAR-01 pins the chip field to 4.
   assert.equal(
-    hex(spiConfigFrame('LEDCAR-01-1', { chip: 2, pixels: 60, order: 1 })),
+    hex(spiConfigFrame('LEDCAR-01-1', { pixels: 60, order: 1 })),
     '7b ff 05 04 00 3c 01 ff bf',
   )
-  // The shifted layout puts the order first and drops the chip field.
+  // The shifted layout puts the order first and drops the type field.
   assert.equal(
-    hex(spiConfigFrame('LEDDMX-02-1', { chip: 2, pixels: 300, order: 3 })),
+    hex(spiConfigFrame('LEDDMX-02-1', { pixels: 300, order: 3 })),
     '7b 05 03 01 2c ff ff ff bf',
   )
 
-  assert.equal(hex(chipModelFrame('LEDDMX-00-1', 2)), '7b ff 03 02 ff ff ff ff bf')
-  assert.equal(hex(chipModelFrame('LEDDMX-02-1', 2)), '7b 03 02 ff ff ff ff ff bf')
   assert.equal(hex(directionFrame('LEDDMX-00-1', true)), '7b ff 0d 01 ff ff ff ff bf')
   assert.equal(hex(directionFrame('LEDDMX-02-1', false)), '7b 0d 00 ff ff ff ff ff bf')
 
@@ -508,4 +507,49 @@ test('addressable strip configuration matches the app', async () => {
   assert.equal(rgbOrdersFor('LEDDMX-00-1').length, 12)
   assert.equal(rgbOrdersFor('LEDDMX-02-1').length, 6)
   assert.equal(rgbOrdersFor('LEDDMX-00-1')[0].name, 'RGB')
+})
+
+test('sound-reactive frames match the app, per family and per source', async () => {
+  const { fff0 } = await import('./fff0.ts')
+  const { bledim } = await import('./bledim.ts')
+
+  // ffe0: one opcode, a flag byte picks mic vs streamed phone audio.
+  assert.equal(hex(ffe0.soundMode!(3, 'LEDBLE-00-1', 'mic')), '7e 00 0e 03 ff ff ff ff ef')
+  assert.equal(hex(ffe0.soundMode!(3, 'LEDBLE-00-1', 'music')), '7e 02 0e 03 ff ff ff ff ef')
+  assert.equal(hex(ffe0.soundMode!(3, 'LEDDMX-00-1', 'mic')), '7b ff 0b 03 00 ff ff ff bf')
+  assert.equal(hex(ffe0.soundMode!(3, 'LEDDMX-00-1', 'music')), '7b ff 0b 03 01 ff ff ff bf')
+  // The shifted layout has no phone-audio variant, and its flag byte differs by name.
+  assert.equal(hex(ffe0.soundMode!(3, 'LEDDMX-02-1', 'mic')), '7b 0b 03 ff ff ff ff ff bf')
+  assert.equal(hex(ffe0.soundMode!(3, 'LEDDMX-02-1', 'music')), '7b 0b 03 ff ff ff ff ff bf')
+  assert.equal(hex(ffe0.soundMode!(3, 'LEDCAR-02-1', 'mic')), '7b 0b 03 00 ff ff ff ff bf')
+  // LEDLIKE swaps which opcode carries which source.
+  assert.equal(hex(ffe0.soundMode!(3, 'LEDLIKE-1', 'music')), '70 04 03 00 ff ff ff ff 0f')
+  assert.equal(hex(ffe0.soundMode!(3, 'LEDLIKE-1', 'mic')), '70 ff 03 01 ff ff ff ff 0f')
+  assert.equal(hex(ffe0.soundMode!(3, 'LEDSUN-1', 'mic')), '7a 07 03 ff ff ff ff ff af')
+
+  assert.equal(hex(ffe0.soundSensitivity!(50, 'LEDBLE-00-1')), '7e ff 07 32 ff ff ff ff ef')
+  assert.equal(hex(ffe0.soundSensitivity!(50, 'LEDDMX-00-1')), '7b ff 0c 32 00 ff ff ff bf')
+  assert.equal(hex(ffe0.soundSensitivity!(50, 'LEDDMX-02-1')), '7b 0c 32 ff ff ff ff ff bf')
+  assert.equal(hex(ffe0.soundSensitivity!(50, 'LEDLIKE-1')), '70 08 32 ff ff ff ff ff 0f')
+
+  // fff0 separates enabling the mic from picking its EQ profile.
+  assert.equal(hex(fff0.soundEnable!(true, 'MELK-OC')), '7e 04 07 01 ff ff ff 00 ef')
+  assert.equal(hex(fff0.soundEnable!(false, 'MELK-OC')), '7e 04 07 00 ff ff ff 00 ef')
+  assert.equal(hex(fff0.soundSensitivity!(50, 'MELK-OC')), '7e 04 06 32 ff ff ff 00 ef')
+  // The EQ profile is offset into 0x80, like this family's effect ids.
+  assert.equal(hex(fff0.soundMode!(2, 'MELK-OC', 'mic')), '7e 07 03 82 04 ff ff 00 ef')
+  assert.equal(hex(fff0.soundMode!(2, 'ELK-BLEDOM', 'mic')), '7e 05 03 82 04 ff ff 00 ef')
+
+  // bledim toggles its hardware mic explicitly.
+  const body = (f: Uint8Array) => [...f.subarray(6, f.length - 1)]
+  assert.equal(bledim.soundEnable!(true, 'BLEDIM')[3], 0x8b)
+  assert.deepEqual(body(bledim.soundEnable!(true, 'BLEDIM')), [1, 0, 0, 0])
+  assert.equal(bledim.soundSensitivity!(100, 'BLEDIM')[3], 0x8c)
+  assert.deepEqual(body(bledim.soundSensitivity!(100, 'BLEDIM')), [255])
+})
+
+test('LEDDMX effects use the built-in mode opcode, not the DIY one', () => {
+  // 0x13 is the user's own DIY patterns; feeding it the built-in table's ids was wrong.
+  assert.equal(hex(ffe0.effect({ id: 42, name: 'x' }, 'LEDDMX-00-1')), '7b ff 03 2a ff ff ff ff bf')
+  assert.equal(hex(ffe0.effect({ id: 42, name: 'x' }, 'LEDDMX-02-1')), '7b 03 2a ff ff ff ff ff bf')
 })

@@ -18,6 +18,7 @@ const CMD = {
   SPEED_BRIGHTNESS: 0x88,
   SERIAL_CODE: 0x89,
   AUDIO_SENSE: 0x8c,
+  ENABLE_HW_AUDIO: 0x8b,
 } as const
 
 /** Free-running packet counter. The device does not validate it. */
@@ -185,6 +186,11 @@ export const bledim: Driver = {
   },
 
   effect: (e, name) => sceneFrame(name, e.id),
+
+  /** This family toggles its hardware microphone explicitly. */
+  soundEnable: (on) => frame(CMD.ENABLE_HW_AUDIO, [on ? 1 : 0, 0, 0, 0]),
+
+  soundSensitivity: (v) => frame(CMD.AUDIO_SENSE, [from100(v)]),
 }
 
 /** Tells the controller how its outputs are wired: 1=DIM 2=CCT 3=RGB 4=RGBW. */

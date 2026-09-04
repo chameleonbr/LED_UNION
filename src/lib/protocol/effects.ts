@@ -573,11 +573,6 @@ export const ledpho: Effect[] = [
   {"id": 15, "name": "Breathe"},
 ]
 
-export const chipModels: Effect[] = [
-  {"id": 1, "name": "UCS512A"},
-  {"id": 2, "name": "UCS512C"},
-]
-
 export const rgbOrders: Effect[] = [
   {"id": 1, "name": "RGB"},
   {"id": 2, "name": "RBG"},
@@ -610,7 +605,6 @@ export default {
   leddmx,
   ledlike,
   ledpho,
-  chipModels,
   rgbOrders,
   rgbOrdersDmx02,
 }
