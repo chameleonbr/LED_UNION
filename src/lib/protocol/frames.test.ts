@@ -222,8 +222,10 @@ test('every family emits 9 bytes with the right header and trailer', () => {
 
 test('effect tables are picked per family', () => {
   assert.equal(ffe0.effects('LEDBLE-00-1').length, 23)
-  // LEDCAR keeps its own table even on the 7B variants.
-  assert.equal(ffe0.effects('LEDCAR-01-1').length, 23)
+  // LEDCAR-01's two outputs use different tables: the RGB one takes the 23-entry car
+  // table, the strip the 211-entry DMX one.
+  assert.equal(ffe0.effects('LEDCAR-01-1', 'ble').length, 23)
+  assert.equal(ffe0.effects('LEDCAR-01-1', 'dmx').length, 211)
   assert.equal(ffe0.effects('LEDCAR-02-1').length, 23)
   assert.equal(ffe0.effects('LEDDMX-00-1').length, 211)
   assert.equal(driverFor('LEDDMX-00-ABCD')?.id, 'ffe0')
@@ -681,8 +683,19 @@ test('LEDCAR-01 drives two outputs by switching envelope, not by channel', async
   // With no variant it stays on the strip, which is what it did before variants existed.
   assert.equal(layoutFor(N), 'dmx')
 
-  assert.deepEqual(d.variants!(N).map((v) => v.id), ['ble', 'dmx'])
-  assert.deepEqual(d.variants!('LEDBLE-00-1'), [])
+  // The model itself says it has two outputs; nothing asks the user.
+  assert.deepEqual(d.outputs!(N).map((o) => o.variant), ['ble', 'dmx'])
+  assert.deepEqual(d.outputs!('LEDBLE-02-1').map((o) => o.ch), [1, 2])
+  assert.deepEqual(d.outputs!('LEDCAR-02-1').map((o) => o.ch), [1, 2])
+  // A single-output model says so by offering fewer than two.
+  assert.deepEqual(d.outputs!('LEDBLE-00-1'), [])
+  assert.deepEqual(d.outputs!('LEDSMART-1'), [])
+
+  // The two outputs use different effect tables. Feeding the 23-entry car table to the
+  // strip landed on whatever dmx_model held at that number, so "Blue gradient" played
+  // something else entirely.
+  assert.equal(d.effects(N, 'ble').length, 23)
+  assert.equal(d.effects(N, 'dmx').length, 211)
 
   // The two outputs must not emit identical frames — that was the whole problem.
   assert.equal(hex(d.rgb(255, 0, 0, N, undefined, 'ble')), '7e ff 05 03 ff 00 00 ff ef')

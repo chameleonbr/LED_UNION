@@ -33,11 +33,12 @@ test('an install from before looks and colours keeps its devices', () => {
   const s = migrate(old)
   assert.equal(s.devices.length, 1)
   assert.equal(s.devices[0].label, 'Carro')
-  // Channel 0 is dropped: it overlapped the real outputs and the global All card, and
-  // showed up as a third, duplicate light in the list.
-  assert.equal(s.devices[0].outputs?.length, 2)
-  assert.deepEqual(s.devices[0].outputs?.map((o) => o.ch), [1, 2])
-  assert.deepEqual(s.devices[0].outputs?.map((o) => o.label), ['fita', 'maçaneta'])
+  // Outputs are derived from the model now, so the stored list goes — but the names
+  // the owner typed are carried across, in order, onto the new endpoint keys.
+  assert.equal((s.devices[0] as Record<string, unknown>).outputs, undefined)
+  assert.equal(s.labels['abc#0'], 'Todas')
+  assert.equal(s.labels['abc#1'], 'fita')
+  assert.equal(s.labels['abc#2'], 'maçaneta')
   assert.equal(s.devices[0].strip?.pixels, 120)
   assert.equal(s.groups.length, 1)
   // Fields that did not exist before are filled in rather than left undefined.
@@ -45,11 +46,16 @@ test('an install from before looks and colours keeps its devices', () => {
   assert.deepEqual(s.looks, {})
 })
 
-test('a device whose only output was channel 0 becomes a plain single device', () => {
+test('a look attached to an old output follows its name to the new key', () => {
   const s = migrate({
-    devices: [{ id: 'a', name: 'LEDBLE-00', driverId: 'ffe0', outputs: [{ ch: 0, label: 'Todas' }] }],
+    devices: [
+      { id: 'a', name: 'LEDCAR-01', driverId: 'ffe0', outputs: [{ ch: 1, label: 'fita' }] },
+    ],
+    looks: { 'a#1': { colorHex: '#00ff00' } },
   })
-  assert.equal(s.devices[0].outputs, undefined)
+  assert.equal((s.devices[0] as Record<string, unknown>).outputs, undefined)
+  assert.equal(s.labels['a#0'], 'fita')
+  assert.deepEqual(s.looks['a#0'], { colorHex: '#00ff00' })
 })
 
 test('scenes from the old single-colour shape are dropped, not misapplied', () => {

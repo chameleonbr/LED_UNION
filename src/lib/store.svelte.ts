@@ -7,7 +7,6 @@ import {
   type CustomEffect,
   type Group,
   type Look,
-  type Output,
   type Persisted,
   type SavedColor,
   type SavedDevice,
@@ -16,13 +15,11 @@ import {
 } from './persist.ts'
 
 export {
-  defaultOutputs,
   seedColors,
   migrate,
   type CustomEffect,
   type Group,
   type Look,
-  type Output,
   type SavedColor,
   type SavedDevice,
   type Scene,
@@ -69,73 +66,15 @@ export function renameDevice(id: string, label: string) {
   save()
 }
 
-export function setOutputs(id: string, outputs: Output[] | undefined) {
-  const d = store.devices.find((x) => x.id === id)
-  if (!d) return
-  if (outputs) d.outputs = outputs
-  else delete d.outputs
-  save()
-}
 
-export function renameOutput(id: string, ch: number, label: string, fallback: string) {
-  const o = store.devices.find((x) => x.id === id)?.outputs?.find((x) => x.ch === ch)
-  if (!o) return
-  o.label = label.trim() || fallback
-  save()
-}
 
 /**
  * Which channel byte reaches which physical output is firmware-specific, and the only
  * way to find out is to try. So the outputs are editable rather than fixed at 1 and 2.
  */
-/** For controllers whose outputs are protocol variants rather than channel numbers. */
-export function setVariantOutputs(
-  id: string,
-  variants: Array<{ id: string; label: string }>,
-) {
-  const d = store.devices.find((x) => x.id === id)
-  if (!d) return
-  d.outputs = variants.map((v, i) => ({ ch: i, label: v.label, variant: v.id }))
-  save()
-}
 
-export function addOutput(id: string, label: string) {
-  const d = store.devices.find((x) => x.id === id)
-  if (!d) return
-  d.outputs ??= []
-  const next = d.outputs.reduce((m, o) => Math.max(m, o.ch), -1) + 1
-  d.outputs.push({ ch: next, label })
-  save()
-}
 
-export function removeOutput(id: string, ch: number) {
-  const d = store.devices.find((x) => x.id === id)
-  if (!d?.outputs) return
-  d.outputs = d.outputs.filter((o) => o.ch !== ch)
-  delete store.looks[`${id}#${ch}`]
-  if (d.outputs.length === 0) delete d.outputs
-  save()
-}
 
-/** Retargeting an output carries its look along, or the card would reset on renumber. */
-export function setOutputChannel(id: string, from: number, to: number) {
-  const d = store.devices.find((x) => x.id === id)
-  const o = d?.outputs?.find((x) => x.ch === from)
-  if (!d || !o || from === to) return
-  if (d.outputs!.some((x) => x.ch === to)) return
-  o.ch = to
-  const look = store.looks[`${id}#${from}`]
-  if (look) {
-    store.looks[`${id}#${to}`] = look
-    delete store.looks[`${id}#${from}`]
-  }
-  for (const s of store.scenes) {
-    for (const e of s.entries) {
-      if (e.key === `${id}#${from}`) e.key = `${id}#${to}`
-    }
-  }
-  save()
-}
 
 export function setChannelMode(id: string, mode: number) {
   const d = store.devices.find((x) => x.id === id)
@@ -151,12 +90,24 @@ export function setStrip(id: string, strip: StripConfig) {
   save()
 }
 
+/** User name for one output, falling back to the model's own label. */
+export const labelOf = (key: string, fallback: string) => store.labels[key] ?? fallback
+
+export function renameEndpoint(key: string, label: string) {
+  const trimmed = label.trim()
+  if (trimmed) store.labels[key] = trimmed
+  else delete store.labels[key]
+  save()
+}
+
 export function forgetDevice(id: string) {
   store.devices = store.devices.filter((d) => d.id !== id)
   for (const g of store.groups) g.deviceIds = g.deviceIds.filter((x) => x !== id)
   // Drop everything keyed to this device, including its outputs' looks.
-  for (const key of Object.keys(store.looks)) {
-    if (key === id || key.startsWith(`${id}#`)) delete store.looks[key]
+  for (const map of [store.looks, store.labels] as Array<Record<string, unknown>>) {
+    for (const key of Object.keys(map)) {
+      if (key === id || key.startsWith(`${id}#`)) delete map[key]
+    }
   }
   for (const s of store.scenes) {
     s.entries = s.entries.filter((e) => e.key !== id && !e.key.startsWith(`${id}#`))

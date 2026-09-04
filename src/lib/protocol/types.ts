@@ -9,6 +9,14 @@ export type Caps = {
 
 export type Effect = { id: number; name: string; group?: string }
 
+/**
+ * One physical output of a controller, as the model defines it.
+ *
+ * `ch` is a channel byte; `variant` selects a whole protocol envelope. A model has
+ * either kind, never both.
+ */
+export type DriverOutput = { label: string; ch?: number; variant?: string }
+
 /** Where the sound comes from: the controller's own mic, or audio from the phone. */
 export type SoundSource = 'mic' | 'music'
 
@@ -57,10 +65,13 @@ export type Driver = {
   /** True when the family puts an output selector in the frame. */
   hasChannels?: boolean
   /**
-   * Outputs that are selected by switching protocol rather than by a channel byte.
-   * Empty for the families that have none.
+   * The outputs this model drives, derived from the advertised name.
+   *
+   * How many lights a controller feeds is a property of the model, and the original
+   * apps know it without asking — LEDCAR-01 always has an RGB output and a strip
+   * output, LEDBLE-02 always has LED1 and LED2. Fewer than two means a single light.
    */
-  variants?(name: string): Array<{ id: string; label: string }>
+  outputs?(name: string): DriverOutput[]
   /** Split writes into chunks of this many bytes. Undefined sends the frame whole. */
   chunkSize?: number
   /** Some families need write-with-response; most take write-without-response. */

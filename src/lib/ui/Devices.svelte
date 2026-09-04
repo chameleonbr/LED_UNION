@@ -3,19 +3,21 @@
     conns, selection, addDevice, connect, disconnect, displayName, forget,
   } from '../ble.svelte.ts'
   import {
-    store, addGroup, removeGroup, renameDevice,
-    setOutputs, renameOutput, defaultOutputs,
-    addOutput, removeOutput, setOutputChannel,
+    store, addGroup, removeGroup, renameDevice, renameEndpoint, labelOf,
   } from '../store.svelte.ts'
   import { epKey } from '../endpoint.ts'
   import { t } from '../i18n.svelte.ts'
 
-  const outputsOf = (id: string) => store.devices.find((d) => d.id === id)?.outputs
+  // The model says how many lights a controller drives; nobody has to declare it.
+  const outputsOf = (c: (typeof conns)[string]) => {
+    const outs = c.driver.outputs?.(c.name) ?? []
+    return outs.length < 2 ? [] : outs
+  }
 
-  /** Every selectable entry: a plain device, or one row per configured output. */
-  function keysOf(id: string): string[] {
-    const outs = outputsOf(id)
-    return outs?.length ? outs.map((o) => epKey(id, o.ch)) : [id]
+  /** Every selectable entry: a plain device, or one row per output the model has. */
+  function keysOf(c: (typeof conns)[string]): string[] {
+    const outs = outputsOf(c)
+    return outs.length ? outs.map((_, i) => epKey(c.id, i)) : [c.id]
   }
 
   let editing = $state('')
@@ -46,7 +48,7 @@
     else selection.ids.push(id)
   }
 
-  const allKeys = $derived(list.flatMap((c) => keysOf(c.id)))
+  const allKeys = $derived(list.flatMap((c) => keysOf(c)))
   const allSelected = $derived(
     allKeys.length > 0 && allKeys.every((k) => selection.ids.includes(k)),
   )
@@ -59,17 +61,11 @@
     selection.ids = keys.filter((k) => conns[k.split('#')[0]])
   }
 
-  function toggleOutputs(id: string) {
-    const has = outputsOf(id)?.length
-    setOutputs(id, has ? undefined : defaultOutputs((n) => t('devices.output', { n })))
-    selection.ids = selection.ids.filter((k) => !k.startsWith(id))
-  }
-
   let editingOut = $state('')
   let outDraft = $state('')
 
-  function commitOutRename(id: string, ch: number) {
-    renameOutput(id, ch, outDraft, t('devices.output', { n: ch }))
+  function commitOutRename(key: string) {
+    renameEndpoint(key, outDraft)
     editingOut = ''
   }
 
@@ -121,10 +117,10 @@
   {/if}
 
   {#each list as c (c.id)}
-    {@const outs = outputsOf(c.id)}
-    {@const selected = keysOf(c.id).some((k) => selection.ids.includes(k))}
+    {@const outs = outputsOf(c)}
+    {@const selected = keysOf(c).some((k) => selection.ids.includes(k))}
     <div class="card row" style:border-color={selected ? 'var(--accent)' : undefined}>
-      {#if !outs?.length}
+      {#if !outs.length}
         <input type="checkbox" checked={selection.ids.includes(c.id)}
                onchange={() => toggle(c.id)} />
       {/if}
@@ -160,54 +156,26 @@
       <button class="ghost danger small" onclick={() => forget(c.id)}>✕</button>
     </div>
 
-    {#if outs?.length}
+    {#if outs.length}
       <div class="outputs">
-        {#each outs as o (o.ch)}
-          {@const key = epKey(c.id, o.ch)}
+        {#each outs as o, i (i)}
+          {@const key = epKey(c.id, i)}
           <div class="card row" style:border-color={selection.ids.includes(key) ? 'var(--accent)' : undefined}>
             <input type="checkbox" checked={selection.ids.includes(key)}
                    onchange={() => toggle(key)} />
             {#if editingOut === key}
               <input type="text" bind:value={outDraft}
-                     onkeydown={(e) => e.key === 'Enter' && commitOutRename(c.id, o.ch)}
-                     onblur={() => commitOutRename(c.id, o.ch)} />
+                     onkeydown={(e) => e.key === 'Enter' && commitOutRename(key)}
+                     onblur={() => commitOutRename(key)} />
             {:else}
               <button class="ghost rename grow"
-                      onclick={() => { editingOut = key; outDraft = o.label }}>
-                {o.label}
+                      onclick={() => { editingOut = key; outDraft = labelOf(key, o.label) }}>
+                {labelOf(key, o.label)}
               </button>
-              <!-- Which channel byte drives which physical output is firmware-specific.
-                   If only one of two outputs responds, the other is on a different
-                   number — so the number is editable rather than fixed. -->
-              <label class="small muted row" style="gap:4px">
-                ch
-                <input class="ch" type="text" inputmode="numeric" value={o.ch}
-                  onchange={(e) => {
-                    const v = Number((e.currentTarget as HTMLInputElement).value)
-                    if (Number.isFinite(v) && v >= 0 && v <= 255) {
-                      setOutputChannel(c.id, o.ch, v)
-                    }
-                  }} />
-              </label>
-              <button class="ghost danger small" title={t('common.remove')}
-                      onclick={() => removeOutput(c.id, o.ch)}>✕</button>
+              <span class="small muted">{o.label}</span>
             {/if}
           </div>
         {/each}
-      </div>
-    {/if}
-
-    {#if c.driver.hasChannels}
-      <div class="row outputs-toggle" style="gap:8px">
-        <button class="ghost small" onclick={() => toggleOutputs(c.id)}>
-          {outs?.length ? t('devices.outputsOff') : t('devices.outputsOn')}
-        </button>
-        {#if outs?.length}
-          <button class="ghost small"
-                  onclick={() => addOutput(c.id, t('devices.output', { n: outs.length + 1 }))}>
-            {t('devices.addOutput')}
-          </button>
-        {/if}
       </div>
     {/if}
   {/each}
@@ -246,18 +214,6 @@
     gap: 6px;
     border-left: 2px solid var(--line);
     padding-left: 10px;
-  }
-
-  .outputs-toggle {
-    align-self: flex-start;
-    margin-left: 22px;
-  }
-
-  .ch {
-    width: 3.2em;
-    min-height: 30px;
-    padding: 0 6px;
-    text-align: center;
   }
 
   .rename {

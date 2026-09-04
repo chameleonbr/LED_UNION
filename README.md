@@ -101,15 +101,17 @@ An **Everything** card at the bottom sets colour and brightness across the lot. 
 deliberately not there: effect ids are per family, so id 42 is one effect on LEDDMX and a
 different one on MELK.
 
-Some controllers pick an output by switching protocol rather than by a channel number.
-LEDCAR-01 drives a plain RGB light on the `7E` envelope and an addressable strip on
-`7B`; the original app threads an `isCAR01DMX` flag through every call for exactly this.
-Splitting one of those gives an **RGB** card and an **SPI** card, and only the SPI one
-offers strip configuration.
+How many lights a controller drives is a property of the model, so the app works it out
+rather than asking. LEDBLE-02 and LEDCAR-02 always have LED 1 and LED 2, addressed by a
+channel byte. LEDCAR-01 always has an **RGB** output and an **SPI** strip, and picks
+between them by swapping the whole frame envelope — `7E` for one, `7B` for the other,
+which is what the vendor app's `isCAR01DMX` flag does.
 
-Which channel byte reaches which physical output is firmware-specific, so the outputs
-are editable: add one, remove one, and change its channel number until the right light
-responds. If only one of two outputs reacts, the other is on a different number.
+Those two outputs also use **different effect tables**: 23 entries for the RGB side, 211
+for the strip. Sending one table's ids to the other plays whatever happens to sit at
+that number.
+
+You can rename each output; the set of them is not editable, because the model decides.
 
 Tick the devices you want and **save a scene**. Applying it touches only those devices
 and leaves everything else alone, reconnecting anything that dropped offline.

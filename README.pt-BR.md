@@ -101,15 +101,17 @@ maçaneta vira dois cards, então uma pode ficar azul e a outra âmbar.
 Um card **Todos** no fim ajusta cor e brilho de tudo de uma vez. Efeito fica de fora de
 propósito: os ids são por família, então o id 42 é um efeito no LEDDMX e outro no MELK.
 
-Algumas controladoras escolhem a saída trocando de protocolo, não por número de canal.
-O LEDCAR-01 alimenta uma luz RGB comum no envelope `7E` e uma fita endereçável no `7B`;
-o app original passa uma flag `isCAR01DMX` em todas as chamadas justamente por isso.
-Dividir uma dessas gera um card **RGB** e um **SPI**, e só o SPI oferece configuração
-de fita.
+Quantas luzes uma controladora alimenta é propriedade do modelo, então o app deduz em
+vez de perguntar. LEDBLE-02 e LEDCAR-02 sempre têm LED 1 e LED 2, endereçados por um
+byte de canal. O LEDCAR-01 sempre tem uma saída **RGB** e uma fita **SPI**, e escolhe
+entre elas trocando o envelope inteiro — `7E` para uma, `7B` para a outra, que é o que
+a flag `isCAR01DMX` do app original faz.
 
-Qual byte de canal chega a qual saída física depende do firmware, então as saídas são
-editáveis: adicionar, remover e trocar o número do canal até a luz certa responder. Se
-só uma de duas saídas reage, a outra está em outro número.
+Essas duas saídas usam **tabelas de efeito diferentes**: 23 entradas do lado RGB, 211
+na fita. Mandar id de uma tabela para a outra toca o que estiver naquele número.
+
+Dá para renomear cada saída; o conjunto delas não é editável, porque quem decide é o
+modelo.
 
 Marque os aparelhos que quiser e **salve uma cena**. Aplicar toca só neles e deixa o
 resto como está, reconectando quem tiver caído.

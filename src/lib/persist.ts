@@ -7,11 +7,6 @@ export type SavedDevice = {
   /** What the user calls it, e.g. "Car · strip + door handle". */
   label?: string
   driverId: string
-  /**
-   * Physical outputs on a multi-output controller. Only the owner can see how the
-   * strips are wired, so this is opt-in per device rather than guessed.
-   */
-  outputs?: Output[]
   /** Wiring of an addressable strip. Only the owner knows what is soldered on. */
   strip?: StripConfig
   /**
@@ -28,26 +23,6 @@ export type StripConfig = {
   /** Channel order id, from the rgb_order table. */
   order: number
 }
-
-/**
- * One physical output.
- *
- * `ch` goes straight into the frame's channel byte, for controllers that address
- * outputs that way. `variant` is for the ones that do not: LEDCAR-01 drives a plain RGB
- * light and an addressable strip, and picks between them by switching the whole frame
- * envelope rather than by a channel number.
- */
-export type Output = { ch: number; label: string; variant?: string }
-
-/**
- * Only the real outputs. Channel 0 means "every output of this controller", which the
- * global All card already covers — offering it here too produced a third card
- * overlapping the other two.
- */
-export const defaultOutputs = (label: (n: number) => string): Output[] => [
-  { ch: 1, label: label(1) },
-  { ch: 2, label: label(2) },
-]
 
 export type Group = { id: string; name: string; deviceIds: string[] }
 
@@ -96,6 +71,8 @@ export type Persisted = {
   groups: Group[]
   scenes: Scene[]
   looks: Record<string, Look>
+  /** User names for outputs, keyed by endpoint key. The set of outputs is derived. */
+  labels: Record<string, string>
   colors: SavedColor[]
   customEffects: CustomEffect[]
   /** Explicit language choice; absent means follow the browser. */
@@ -123,6 +100,7 @@ export const empty = (): Persisted => ({
   groups: [],
   scenes: [],
   looks: {},
+  labels: {},
   colors: seedColors(),
   customEffects: [],
 })
@@ -140,15 +118,22 @@ export function migrate(raw: unknown): Persisted {
     merged.colors = seedColors()
   }
   if (!merged.looks || typeof merged.looks !== 'object') merged.looks = {}
+  if (!merged.labels || typeof merged.labels !== 'object') merged.labels = {}
   if (!Array.isArray(merged.customEffects)) merged.customEffects = []
 
-  // Channel 0 addressed "every output of this controller". With per-output control it
-  // overlaps the two real outputs and the global All card, and on screen it read as a
-  // third, duplicate light. Drop it from installs that still carry it.
-  for (const d of merged.devices ?? []) {
-    if (d.outputs?.length) {
-      d.outputs = d.outputs.filter((o) => o.ch !== 0)
-      if (d.outputs.length === 0) delete d.outputs
+  // Outputs used to be declared by hand and stored per device. They are derived from
+  // the model now — the vendor apps know a LEDCAR-01 has two without asking — so the
+  // stored list goes, but the names the owner gave them are carried across in order.
+  for (const d of (merged.devices ?? []) as Array<Record<string, any>>) {
+    const legacy = d.outputs as Array<{ ch: number; label: string }> | undefined
+    if (legacy?.length) {
+      legacy.forEach((o, i) => {
+        const key = `${d.id}#${i}`
+        if (o.label && !merged.labels[key]) merged.labels[key] = o.label
+        const oldLook = merged.looks[`${d.id}#${o.ch}`]
+        if (oldLook && !merged.looks[key]) merged.looks[key] = oldLook
+      })
+      delete d.outputs
     }
   }
 

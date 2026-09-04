@@ -1,4 +1,6 @@
-import type { Caps, CustomEffectSpec, Driver, Effect, SoundSource } from './types.ts'
+import type {
+  Caps, CustomEffectSpec, Driver, DriverOutput, Effect, SoundSource,
+} from './types.ts'
 import { byte, pct } from './types.ts'
 import effects from './effects.ts'
 
@@ -46,11 +48,29 @@ export function layoutFor(name: string, variant?: string): Layout {
   return 'ble'
 }
 
-/** LEDCAR-01's two outputs, which are protocol variants rather than channels. */
-const CAR01_VARIANTS = [
-  { id: 'ble', label: 'RGB' },
-  { id: 'dmx', label: 'SPI' },
-]
+/**
+ * What each model actually drives. The original app hard-codes these per model too:
+ * it shows the LED1/ALL/LED2 selector only for LEDBLE-02 and LEDCAR-02, and the
+ * RGB/SPI selector only for LEDCAR-01.
+ */
+export function outputsFor(name: string): DriverOutput[] {
+  // Two different kinds of light, selected by swapping the frame envelope.
+  if (/^LEDCAR-01/i.test(name)) {
+    return [
+      { label: 'RGB', variant: 'ble' },
+      { label: 'SPI', variant: 'dmx' },
+    ]
+  }
+  // Two outputs of the same kind, selected by the channel byte. Channel 0 means both,
+  // which the global All card already covers.
+  if (/^(LEDBLE-02|LEDCAR-02)/i.test(name)) {
+    return [
+      { label: 'LED 1', ch: 1 },
+      { label: 'LED 2', ch: 2 },
+    ]
+  }
+  return []
+}
 
 // LEDSTAGE and LEDLIGHT use a different power frame than the rest of the 7E family.
 const isStage = (name: string) => /^(LEDSTAGE|LEDLIGHT)/i.test(name)
@@ -113,7 +133,7 @@ export const ffe0: Driver = {
     /^(LED[_ ]?BLE|LEDSTAGE|LEDLIGHT|LEDDMX|LEDCAR|LEDSMART|LEDSUN|LEDLIKE|LEDPHO)/i
       .test(name),
 
-  variants: (name) => (/^LEDCAR-01/i.test(name) ? CAR01_VARIANTS : []),
+  outputs: outputsFor,
 
   caps(name, variant): Caps {
     const l = layoutFor(name, variant)
@@ -128,8 +148,13 @@ export const ffe0: Driver = {
   },
 
   effects(name, variant): Effect[] {
-    // LEDCAR ships its own table, and keeps it even on the variants that speak the
-    // 7B envelope.
+    // LEDCAR-01's two outputs use different tables: the RGB one takes car_mode, the
+    // strip takes the 211-entry dmx_model. Feeding car_mode ids to the strip lands on
+    // whatever dmx_model has at that number, which is why "Blue gradient" played
+    // something else entirely.
+    if (/^LEDCAR-01/i.test(name)) {
+      return variant === 'ble' ? effects.ledcar : effects.leddmx
+    }
     if (/^LEDCAR/i.test(name)) return effects.ledcar
     switch (layoutFor(name, variant)) {
       case 'dmx':

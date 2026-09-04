@@ -21,10 +21,7 @@ export const en: Dict = {
   'devices.empty': 'No devices yet. Power the strips on and tap Add device.',
   'devices.connect': 'Connect',
   'devices.disconnect': 'Disconnect',
-  'devices.outputsOn': 'This controller has separate outputs',
-  'devices.outputsOff': 'Remove outputs',
   'devices.output': 'Output {n}',
-  'devices.addOutput': '+ Add output',
   'devices.renameHint': 'e.g. Car · strip + door handle',
   'devices.groups': 'Groups',
   'devices.groupName': 'Group name',
@@ -52,10 +49,6 @@ export const en: Dict = {
   'effects.saveScene': 'Save as scene',
   'effects.sceneName': 'Scene name',
   'effects.pickToSave': 'Tick the devices you want in the scene.',
-  'effects.splitTitle': 'Does {name} drive more than one light?',
-  'effects.splitHint':
-    'Split it into separate outputs, each with its own colour and effect. Rename them and adjust their channel numbers in the Devices tab.',
-  'effects.split': 'Split',
 
   'bledim.channels': 'Channel mode',
   'bledim.channelsHint':
@@ -127,10 +120,7 @@ export const ptBR: Dict = {
   'devices.empty': 'Nenhum aparelho ainda. Ligue as fitas e toque em Adicionar aparelho.',
   'devices.connect': 'Conectar',
   'devices.disconnect': 'Desconectar',
-  'devices.outputsOn': 'Esta controladora tem saídas separadas',
-  'devices.outputsOff': 'Remover saídas',
   'devices.output': 'Saída {n}',
-  'devices.addOutput': '+ Adicionar saída',
   'devices.renameHint': 'Ex: Carro · fita + maçaneta',
   'devices.groups': 'Grupos',
   'devices.groupName': 'Nome do grupo',
@@ -158,10 +148,6 @@ export const ptBR: Dict = {
   'effects.saveScene': 'Salvar como cena',
   'effects.sceneName': 'Nome da cena',
   'effects.pickToSave': 'Marque os aparelhos que devem entrar na cena.',
-  'effects.splitTitle': 'O {name} controla mais de uma luz?',
-  'effects.splitHint':
-    'Divida em saídas separadas, cada uma com cor e efeito próprios. Renomeie e ajuste os números de canal na aba Aparelhos.',
-  'effects.split': 'Dividir',
 
   'bledim.channels': 'Modo de canal',
   'bledim.channelsHint':

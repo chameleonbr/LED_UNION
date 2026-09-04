@@ -1,9 +1,7 @@
 <script lang="ts">
   import { conns, applyTo, displayName } from '../ble.svelte.ts'
   import { epKey } from '../endpoint.ts'
-  import {
-    store, addScene, setLook, setOutputs, defaultOutputs, setVariantOutputs,
-  } from '../store.svelte.ts'
+  import { store, addScene, setLook, labelOf } from '../store.svelte.ts'
   import { t } from '../i18n.svelte.ts'
   import DeviceCard from './DeviceCard.svelte'
   import ColorSelect from './ColorSelect.svelte'
@@ -19,40 +17,18 @@
     label: string
   }
 
-  /**
-   * Controllers that can address separate outputs but have not been split yet. The
-   * toggle lives in the Devices tab, which is not where anyone looks when they are
-   * staring at one card for a controller they know drives two lights.
-   */
-  const splittable = $derived(
-    Object.values(conns).filter(
-      (c) =>
-        (c.driver.hasChannels || (c.driver.variants?.(c.name)?.length ?? 0) > 0) &&
-        !store.devices.find((d) => d.id === c.id)?.outputs?.length,
-    ),
-  )
-
-  function split(c: (typeof conns)[string]) {
-    // LEDCAR-01 and friends pick an output by switching protocol, so their split is one
-    // card per variant. Splitting them by channel number would produce two cards that
-    // emit byte-identical frames.
-    const vs = c.driver.variants?.(c.name) ?? []
-    if (vs.length) setVariantOutputs(c.id, vs)
-    else setOutputs(c.id, defaultOutputs((n) => t('devices.output', { n })))
-  }
-
   const logicals = $derived<Logical[]>(
     Object.values(conns).flatMap((c) => {
-      const outs = store.devices.find((d) => d.id === c.id)?.outputs
-      if (!outs?.length) return [{ key: c.id, conn: c, label: displayName(c) }]
-      return outs.map((o) => ({
-        key: epKey(c.id, o.ch),
+      // How many lights a controller drives is a property of the model, so the driver
+      // says. The vendor apps do the same — they never ask.
+      const outs = c.driver.outputs?.(c.name) ?? []
+      if (outs.length < 2) return [{ key: c.id, conn: c, label: displayName(c) }]
+      return outs.map((o, i) => ({
+        key: epKey(c.id, i),
         conn: c,
         ch: o.ch,
         variant: o.variant,
-        // The output's own name is what the user sees; the controller name is context
-        // and lives in the card's footer.
-        label: o.label,
+        label: labelOf(epKey(c.id, i), o.label),
       }))
     }),
   )
@@ -123,15 +99,6 @@
       <CustomEffectEditor onclose={() => (editing = false)} />
     {/if}
 
-    {#each splittable as c (c.id)}
-      <div class="card row" style="border-style:dashed">
-        <div class="grow col" style="gap:2px">
-          <div class="small">{t('effects.splitTitle', { name: displayName(c) })}</div>
-          <div class="small muted">{t('effects.splitHint')}</div>
-        </div>
-        <button class="small" onclick={() => split(c)}>{t('effects.split')}</button>
-      </div>
-    {/each}
 
 
     <div class="card col" style="border-style:dashed">
