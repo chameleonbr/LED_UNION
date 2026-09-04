@@ -425,3 +425,51 @@ test('the shifted DMX layout uses its own dim opcode', () => {
   // The unshifted one keeps the double encoding.
   assert.equal(hex(ffe0.white!(50, 'LEDDMX-00-1')), '7b ff 09 10 32 ff ff ff bf')
 })
+
+test('bledim scene header matches what the app itself builds at runtime', async () => {
+  const { readFileSync } = await import('node:fs')
+  const fx = JSON.parse(
+    readFileSync(new URL('./__fixtures__/bledim_scene.json', import.meta.url), 'utf8'),
+  )
+  const { bledim } = await import('./bledim.ts')
+  const parse = (s: string) => s.split(' ').map((h) => parseInt(h, 16))
+
+  // The static extractor can only pin this frame's header, because the app memcpy's
+  // the payload. These vectors came from calling the app's own ScenePara.EnPackToDb()
+  // inside a rooted Android container.
+  for (const [key, effectId] of [['effect0_chase', 0], ['effect4_chase', 4]] as const) {
+    const want = parse(fx[key])
+    // A device name no other test has touched, so the per-device state is pristine.
+    const got = [...bledim.effect({ id: effectId, name: 'x' }, `BLEDIM-fixture-${key}`)]
+      .slice(6, -1)
+    assert.equal(got.length, want.length)
+    // Offsets 0..15 are the scene header; everything past it is the colour table,
+    // and only the first `bClrQty` entries are read.
+    assert.deepEqual(
+      got.slice(0, 16),
+      want.slice(0, 16),
+      `${key}: scene header must match the app byte for byte`,
+    )
+  }
+
+  // The sentinel for "no built-in effect" is 0xFF, never 0.
+  assert.equal(parse(fx.static_color)[14], 0xff)
+  assert.equal(parse(fx.default)[1], 0xc0, 'default speed 192')
+  assert.equal(parse(fx.default)[2], 0xff, 'default brightness 255')
+})
+
+test('bledim speed and brightness are remembered per device, not globally', async () => {
+  const { bledim } = await import('./bledim.ts')
+  const A = 'BLEDIM-A'
+  const B = 'BLEDIM-B'
+  // One command carries both values, so each device needs its own memory — sharing
+  // one would push device A's brightness onto device B.
+  bledim.brightness(100, A)
+  bledim.speed(0, B)
+  const a = [...bledim.brightness(100, A)]
+  const b = [...bledim.speed(0, B)]
+  assert.equal(a[8], 192, 'A keeps the default speed')
+  assert.equal(a[9], 255, 'A keeps its brightness')
+  assert.equal(b[8], 0, 'B has its own speed')
+  assert.equal(b[9], 255, 'B keeps the default brightness')
+})

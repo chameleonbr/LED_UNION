@@ -52,7 +52,7 @@ Um casa só por prefixo (a cena de 72 bytes do BLEDIM, cujo payload é copiado e
 
 ### O que isso pegou
 
-**Três bugs**, todos invisíveis para teste escrito à mão — porque meus testes
+**Cinco bugs**, todos invisíveis para teste escrito à mão — porque meus testes
 afirmavam exatamente o que eu tinha entendido errado.
 
 O `iSceneNo` da estrutura de cena do BLEDIM (offset 4). Eu tinha posto `0xFF`,
@@ -73,6 +73,36 @@ LEDDMX               7B 04 04 01 FF FF FF FF BF
 
 **3. Dim do LEDDMX-02 / LEDCAR-02.** Eu tinha inventado usar o slot branco do frame
 RGB (`7B 07 00 00 00 <w> …`). O app tem opcode dedicado: `7B 09 <v> FF FF FF FF FF BF`.
+
+**4. Estado de velocidade/brilho do BLEDIM era global do módulo.** Esses dois valores
+viajam no mesmo comando, então mudar um exige reenviar o outro — e eu guardava a
+memória num único objeto de módulo. Com dois controladores BLEDIM, ajustar o brilho
+de um empurraria esse brilho para o outro. Agora é por aparelho.
+
+Esse apareceu porque o teste de fixture falhou: testes anteriores tinham mutado o
+estado global, e a cena saiu com velocidade 0. O sintoma era "teste frágil"; a causa
+era um bug de verdade.
+
+**5. `iSceneNo`** — ver acima.
+
+## Parte dinâmica
+
+O payload de cena de 72 bytes do BLEDIM é copiado em loop, então o extrator estático
+só consegue fixar o cabeçalho. `bledim_scene.js` fecha essa lacuna: roda dentro do
+app, chama o `ScenePara.EnPackToDb()` **dele mesmo** e imprime o buffer resultante.
+
+```bash
+frida -H 127.0.0.1:27042 -p <pid> -l tools/difftest/bledim_scene.js
+```
+
+Os vetores capturados estão em `src/lib/protocol/__fixtures__/bledim_scene.json` e
+são verificados em `frames.test.ts`. Confirmaram:
+
+- offsets 0–15 do nosso frame batem byte a byte
+- `[1]=0xC0` velocidade e `[2]=0xFF` brilho são mesmo os padrões
+- `[14]` carrega o efeito, com `0xFF` como sentinela de "sem efeito"
+- a tabela de cores vem **pré-preenchida com uma paleta**, não zerada — mas com
+  `bClrQty=1` só a entrada 0 é lida, então o resto é inerte
 
 ## Os 289 literais que não emitimos
 

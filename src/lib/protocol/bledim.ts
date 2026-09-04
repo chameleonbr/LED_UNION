@@ -58,20 +58,35 @@ export function serialCodeFrame(now = new Date()): Uint8Array {
 /** This family speaks 0..255; the Driver interface speaks percent. */
 const from100 = (v: number) => Math.round((pct(v) * 255) / 100)
 
-// Speed and brightness travel in one command, so the last value of each has to be
-// remembered to change one without resetting the other.
-const state = { speed: 192, brightness: 255, strobe: 0 }
+/**
+ * Speed and brightness travel in one command, so changing one means resending the
+ * other. Keyed per device: two BLEDIM controllers must not share one memory, or
+ * setting brightness on one would push it onto the other.
+ *
+ * Defaults match the app's own ScenePara constructor.
+ */
+type DeviceState = { speed: number; brightness: number; strobe: number }
+const states = new Map<string, DeviceState>()
+const stateFor = (name: string): DeviceState => {
+  let s = states.get(name)
+  if (!s) {
+    s = { speed: 192, brightness: 255, strobe: 0 }
+    states.set(name, s)
+  }
+  return s
+}
 
 /** 255 means "no stored scene" — i.e. apply live rather than editing a saved one. */
 const FREE_SCENE = 0xff
 
-function speedBrightness(commit = true): Uint8Array {
+function speedBrightness(name: string, commit = true): Uint8Array {
+  const s = stateFor(name)
   return frame(CMD.SPEED_BRIGHTNESS, [
     FREE_SCENE,
     commit ? 1 : 0,
-    state.speed,
-    state.brightness,
-    state.strobe,
+    s.speed,
+    s.brightness,
+    s.strobe,
     0,
   ])
 }
@@ -92,16 +107,23 @@ const SCENE_PARA_SIZE = 72
  * Everything not named here stays zero, which is what the app sends for a freshly
  * built scene.
  */
-function sceneFrame(effectId: number, r = 255, g = 255, b = 255): Uint8Array {
+function sceneFrame(
+  name: string,
+  effectId: number,
+  r = 255,
+  g = 255,
+  b = 255,
+): Uint8Array {
+  const s = stateFor(name)
   const p = new Array(SCENE_PARA_SIZE).fill(0)
   p[0] = 0 // fade off
-  p[1] = state.speed
-  p[2] = state.brightness
+  p[1] = s.speed
+  p[2] = s.brightness
   p[3] = 1 // one colour entry
   // Offset 4 is the scene slot, and the app zeroes it on every buffer it builds.
   // Not to be confused with the 0x88 command's own scene field, which uses 255.
   p[4] = 0
-  p[6] = state.strobe
+  p[6] = s.strobe
   // Low 7 bits are the effect index; bit 7 turns the chase/dynamic mode on.
   p[14] = (clamp(effectId, 0, 0x7f) | 0x80) & 0xff
   // Colour entries start at 16 and are [W, R, G, B].
@@ -152,17 +174,17 @@ export const bledim: Driver = {
 
   white: (v) => frame(CMD.SELECT_COLOR, [from100(v), 0, 0, 0]),
 
-  brightness(v) {
-    state.brightness = from100(v)
-    return speedBrightness()
+  brightness(v, name) {
+    stateFor(name).brightness = from100(v)
+    return speedBrightness(name)
   },
 
-  speed(v) {
-    state.speed = from100(v)
-    return speedBrightness()
+  speed(v, name) {
+    stateFor(name).speed = from100(v)
+    return speedBrightness(name)
   },
 
-  effect: (e) => sceneFrame(e.id),
+  effect: (e, name) => sceneFrame(name, e.id),
 }
 
 /** Tells the controller how its outputs are wired: 1=DIM 2=CCT 3=RGB 4=RGBW. */
