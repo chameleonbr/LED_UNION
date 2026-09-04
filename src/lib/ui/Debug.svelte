@@ -1,6 +1,6 @@
 <script lang="ts">
   import {
-    conns, inspect, sendRaw, parseHex,
+    conns, inspect, sendRaw, parseHex, displayName,
     type ServiceInfo,
   } from '../ble.svelte.ts'
 
@@ -120,7 +120,7 @@
     <select bind:value={deviceId} class="sel">
       <option value="">Escolha…</option>
       {#each list as c (c.id)}
-        <option value={c.id}>{c.name} — {c.state}</option>
+        <option value={c.id}>{displayName(c)} — {c.state}</option>
       {/each}
     </select>
   </label>

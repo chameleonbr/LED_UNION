@@ -1,6 +1,26 @@
 <script lang="ts">
-  import { conns, selection, addDevice, connect, disconnect } from '../ble.svelte.ts'
-  import { store, forgetDevice, addGroup, removeGroup } from '../store.svelte.ts'
+  import {
+    conns, selection, addDevice, connect, disconnect, displayName,
+  } from '../ble.svelte.ts'
+  import {
+    store, forgetDevice, addGroup, removeGroup, renameDevice,
+  } from '../store.svelte.ts'
+
+  let editing = $state('')
+  let draft = $state('')
+
+  function startRename(id: string, current: string) {
+    editing = id
+    draft = current
+  }
+
+  function commitRename() {
+    if (!editing) return
+    renameDevice(editing, draft)
+    const c = conns[editing]
+    if (c) c.label = draft.trim() || undefined
+    editing = ''
+  }
 
   let busy = $state(false)
   let error = $state('')
@@ -77,11 +97,27 @@
       <input type="checkbox" checked={selected} onchange={() => toggle(c.id)} />
       <span class="dot {c.state}"></span>
       <div class="grow col" style="gap:2px">
-        <div class="truncate">{c.name}</div>
-        <div class="small muted">
-          {c.driver.label}
-          {#if c.error}· <span style="color:var(--err)">{c.error}</span>{/if}
-        </div>
+        {#if editing === c.id}
+          <input
+            type="text"
+            bind:value={draft}
+            placeholder="Ex: Carro · fita + maçaneta + soleira"
+            onkeydown={(e) => e.key === 'Enter' && commitRename()}
+            onblur={commitRename}
+          />
+        {:else}
+          <button
+            class="ghost rename"
+            onclick={() => startRename(c.id, c.label ?? '')}
+            title="Renomear"
+          >
+            {displayName(c)}
+          </button>
+          <div class="small muted truncate">
+            {#if c.label}{c.name} · {/if}{c.driver.label}
+            {#if c.error}· <span style="color:var(--err)">{c.error}</span>{/if}
+          </div>
+        {/if}
       </div>
       {#if c.state === 'online'}
         <button class="ghost small" onclick={() => disconnect(c.id)}>Desconectar</button>
@@ -117,3 +153,19 @@
     </div>
   {/each}
 </div>
+
+<style>
+  .rename {
+    min-height: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    text-align: left;
+    border-bottom: 1px dashed var(--line);
+    align-self: flex-start;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>

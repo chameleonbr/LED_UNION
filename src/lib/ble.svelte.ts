@@ -3,11 +3,17 @@ export { parseHex, toHex } from './hex.ts'
 import { allServices, driverFor, drivers, type Driver } from './protocol/index.ts'
 import { rememberDevice, store } from './store.svelte.ts'
 
+/** What to show a human. Never pass this to a driver. */
+export const displayName = (c: { name: string; label?: string }) => c.label || c.name
+
 export type ConnState = 'offline' | 'connecting' | 'online' | 'error'
 
 export type Conn = {
   id: string
+  /** Advertised name — what the drivers branch on. */
   name: string
+  /** User-chosen display name, if any. */
+  label?: string
   driver: Driver
   state: ConnState
   error?: string
@@ -35,8 +41,9 @@ export const supported = () =>
 
 function track(device: BluetoothDevice, driver: Driver) {
   const name = device.name ?? '(sem nome)'
+  const saved = store.devices.find((d) => d.id === device.id)
   conns[device.id] ??= { id: device.id, name, driver, state: 'offline' }
-  Object.assign(conns[device.id], { name })
+  Object.assign(conns[device.id], { name, label: saved?.label })
   if (!live.has(device.id)) {
     live.set(device.id, { device, queue: new WriteQueue(driver.minGapMs) })
   }
@@ -53,7 +60,7 @@ function track(device: BluetoothDevice, driver: Driver) {
     const l = live.get(device.id)
     if (l) l.char = undefined
   })
-  rememberDevice({ id: device.id, name, driverId: driver.id })
+  rememberDevice({ id: device.id, name, label: saved?.label, driverId: driver.id })
 }
 
 /**
@@ -66,7 +73,9 @@ export async function restore(): Promise<void> {
   if (!supported()) return
   for (const d of store.devices) {
     const driver = driverFor(d.name)
-    if (driver) conns[d.id] ??= { id: d.id, name: d.name, driver, state: 'offline' }
+    if (driver) {
+      conns[d.id] ??= { id: d.id, name: d.name, label: d.label, driver, state: 'offline' }
+    }
   }
   const getDevices = (navigator.bluetooth as any).getDevices?.bind(navigator.bluetooth)
   if (!getDevices) return

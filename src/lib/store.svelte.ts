@@ -1,6 +1,13 @@
 import type { Effect } from './protocol/index.ts'
 
-export type SavedDevice = { id: string; name: string; driverId: string }
+export type SavedDevice = {
+  id: string
+  /** Advertised name. Drives protocol decisions — never edit it. */
+  name: string
+  /** What the user calls it, e.g. "Carro · fita + maçaneta + soleira". */
+  label?: string
+  driverId: string
+}
 export type Group = { id: string; name: string; deviceIds: string[] }
 
 /** A snapshot to re-apply later. Only the fields that were actually set. */
@@ -47,6 +54,15 @@ export function rememberDevice(d: SavedDevice) {
   const existing = store.devices.find((x) => x.id === d.id)
   if (existing) Object.assign(existing, d)
   else store.devices.push(d)
+  save()
+}
+
+export function renameDevice(id: string, label: string) {
+  const d = store.devices.find((x) => x.id === id)
+  if (!d) return
+  const trimmed = label.trim()
+  if (trimmed) d.label = trimmed
+  else delete d.label
   save()
 }
 
