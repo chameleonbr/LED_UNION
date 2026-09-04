@@ -2,7 +2,11 @@ import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { VitePWA } from 'vite-plugin-pwa'
 
-export default defineConfig({
+// Served as a GitHub project page, so the site lives under /LED_UNION/ and every asset
+// URL has to carry that prefix. Dev stays at the root: the adb-tunnel workflow points a
+// phone at http://localhost:5173, and a prefix there would only get in the way.
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/LED_UNION/' : '/',
   // Reachable over the tailnet for on-device testing; ts.net terminates TLS, which
   // is what makes Web Bluetooth available at all.
   server: {
@@ -26,7 +30,9 @@ export default defineConfig({
         background_color: '#0b0d12',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
+        // Relative, so it resolves against wherever the manifest is served from and
+        // survives a change of base.
+        start_url: './',
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
@@ -40,4 +46,4 @@ export default defineConfig({
       },
     }),
   ],
-})
+}))

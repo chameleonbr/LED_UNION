@@ -36,9 +36,13 @@ the channels section in [`docs/protocol/ledble.md`](docs/protocol/ledble.md).
 
 ## Deployment
 
-Pushing to `main` builds and publishes to **https://led.avila.dev.br** via GitHub
-Actions and GitHub Pages. The workflow runs the tests and the type check first — a red
-build never reaches the domain.
+Pushing to `main` builds and publishes to
+**https://chameleonbr.github.io/LED_UNION/** via GitHub Actions and GitHub Pages. The
+workflow runs the tests and the type check first — a red build never ships.
+
+It is served as a *project* page, so the site lives under `/LED_UNION/` and Vite builds
+with that `base`. Development stays at the root, because the adb-tunnel workflow points
+a phone at `http://localhost:5173`.
 
 The built `dist/` is deliberately **not** committed: it would conflict on every build
 (asset hashes change), and a stale artifact silently diverging from the source is worse

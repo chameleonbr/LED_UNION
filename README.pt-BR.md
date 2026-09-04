@@ -37,9 +37,13 @@ soleira) e o frame de cor padrão só atinge uma delas. Ver a seção de canais 
 
 ## Deploy
 
-Push na `main` compila e publica em **https://led.avila.dev.br** via GitHub Actions e
-GitHub Pages. O workflow roda os testes e a checagem de tipos antes — build vermelho
-não chega ao domínio.
+Push na `main` compila e publica em
+**https://chameleonbr.github.io/LED_UNION/** via GitHub Actions e GitHub Pages. O
+workflow roda os testes e a checagem de tipos antes — build vermelho não é publicado.
+
+É servido como *project page*, então o site fica sob `/LED_UNION/` e o Vite compila com
+esse `base`. Em desenvolvimento fica na raiz, porque o fluxo do túnel adb aponta o
+celular para `http://localhost:5173`.
 
 O `dist/` compilado **não** é commitado de propósito: daria conflito em todo build (os
 hashes dos assets mudam), e um artefato desatualizado divergindo do fonte em silêncio é
