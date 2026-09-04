@@ -1,5 +1,7 @@
 import { WriteQueue } from './queue.ts'
 export { parseHex, toHex } from './hex.ts'
+import { epKey, parseEp } from './endpoint.ts'
+export { epKey, parseEp }
 import { allServices, driverFor, drivers, type Driver } from './protocol/index.ts'
 import { rememberDevice, store } from './store.svelte.ts'
 
@@ -234,26 +236,33 @@ async function writeRaw(l: Live, frame: Uint8Array) {
 }
 
 /** Devices the current selection resolves to, skipping ones that are not live. */
-export const targets = () => selection.ids.map((id) => conns[id]).filter(Boolean)
+export const targets = () =>
+  [...new Set(selection.ids.map((k) => parseEp(k).deviceId))]
+    .map((id) => conns[id])
+    .filter(Boolean)
 
 /**
  * Build a frame per device (drivers differ) and write it to everything selected.
  * `coalesceKey` marks a stream where only the newest value matters.
  */
 export async function apply(
-  build: (driver: Driver, name: string) => Uint8Array | undefined,
+  build: (driver: Driver, name: string, ch?: number) => Uint8Array | undefined,
   coalesceKey?: string,
 ): Promise<void> {
   await Promise.allSettled(
-    selection.ids.map(async (id) => {
-      const c = conns[id]
-      const l = live.get(id)
+    selection.ids.map(async (key) => {
+      const { deviceId, ch } = parseEp(key)
+      const c = conns[deviceId]
+      const l = live.get(deviceId)
       if (!c || !l) return
-      if (c.state !== 'online') await connect(id)
-      const frame = build(c.driver, c.name)
+      if (c.state !== 'online') await connect(deviceId)
+      const frame = build(c.driver, c.name, ch)
       if (!frame) return
       const op = () => writeRaw(l, frame)
-      return coalesceKey ? l.queue.pushLatest(coalesceKey, op) : l.queue.push(op)
+      // Coalescing is per output, or two outputs would cancel each other out.
+      return coalesceKey
+        ? l.queue.pushLatest(`${coalesceKey}:${ch ?? ''}`, op)
+        : l.queue.push(op)
     }),
   )
 }

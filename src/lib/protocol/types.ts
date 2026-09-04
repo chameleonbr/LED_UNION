@@ -28,13 +28,20 @@ export type Driver = {
   /** Frames to write right after connecting, if the family needs a handshake. */
   onConnect?(name: string, now?: Date): Uint8Array[]
 
-  power(on: boolean, name: string): Uint8Array
-  rgb(r: number, g: number, b: number, name: string): Uint8Array
+  /**
+   * `ch` addresses one physical output on a multi-output controller. Drivers that
+   * have no such concept ignore it. Undefined means "whatever the family's default
+   * byte is", which is not always the same as "all outputs".
+   */
+  power(on: boolean, name: string, ch?: number): Uint8Array
+  rgb(r: number, g: number, b: number, name: string, ch?: number): Uint8Array
   /** pct 0..100 */
-  brightness(pct: number, name: string): Uint8Array
+  brightness(pct: number, name: string, ch?: number): Uint8Array
   /** pct 0..100 */
-  speed(pct: number, name: string): Uint8Array
-  effect(e: Effect, name: string): Uint8Array
+  speed(pct: number, name: string, ch?: number): Uint8Array
+  effect(e: Effect, name: string, ch?: number): Uint8Array
+  /** True when the family puts an output selector in the frame. */
+  hasChannels?: boolean
   /** pct 0..100 */
   white?(pct: number, name: string): Uint8Array
   /** warm/cool 0..100 */

@@ -130,3 +130,26 @@ test('parseHex accepts the formats a human actually types', async () => {
   assert.throws(() => parseHex('7E0'), /ímpar|inválido/i)
   assert.throws(() => parseHex(''), /inválido/i)
 })
+
+test('endpoint keys round-trip device and channel', async () => {
+  const { epKey, parseEp } = await import('../endpoint.ts')
+  assert.equal(epKey('abc'), 'abc')
+  assert.equal(epKey('abc', 0), 'abc#0')
+  assert.equal(epKey('abc', 2), 'abc#2')
+  assert.deepEqual(parseEp('abc'), { deviceId: 'abc' })
+  assert.deepEqual(parseEp('abc#0'), { deviceId: 'abc', ch: 0 })
+  assert.deepEqual(parseEp('abc#2'), { deviceId: 'abc', ch: 2 })
+  // Device ids from Web Bluetooth are base64ish and can contain odd characters.
+  assert.deepEqual(parseEp('a/b+c=#1'), { deviceId: 'a/b+c=', ch: 1 })
+})
+
+test('ffe0 puts the channel in byte 7, and keeps the default without one', async () => {
+  const { ffe0 } = await import('./ffe0.ts')
+  const hexOf = (b: Uint8Array) => [...b].map((x) => x.toString(16).padStart(2, '0')).join(' ')
+  assert.equal(hexOf(ffe0.rgb(255, 0, 0, 'LEDBLE-00', 1)), '7e ff 05 03 ff 00 00 01 ef')
+  assert.equal(hexOf(ffe0.rgb(255, 0, 0, 'LEDBLE-00', 0)), '7e ff 05 03 ff 00 00 00 ef')
+  assert.equal(hexOf(ffe0.rgb(255, 0, 0, 'LEDBLE-00')), '7e ff 05 03 ff 00 00 ff ef')
+  assert.equal(ffe0.brightness(50, 'LEDBLE-00', 2)[7], 2)
+  assert.equal(ffe0.power(true, 'LEDBLE-00', 2)[7], 2)
+  assert.equal(ffe0.hasChannels, true)
+})

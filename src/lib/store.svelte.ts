@@ -7,7 +7,22 @@ export type SavedDevice = {
   /** What the user calls it, e.g. "Carro · fita + maçaneta + soleira". */
   label?: string
   driverId: string
+  /**
+   * Physical outputs on a multi-output controller. Only the owner can see how the
+   * strips are wired, so this is opt-in per device rather than guessed.
+   */
+  outputs?: Output[]
 }
+
+/** One physical output. `ch` goes straight into the frame's channel byte. */
+export type Output = { ch: number; label: string }
+
+/** Matches the LED1 / ALL / LED2 selector in the original app. */
+export const defaultOutputs = (): Output[] => [
+  { ch: 0, label: 'Todas' },
+  { ch: 1, label: 'Saída 1' },
+  { ch: 2, label: 'Saída 2' },
+]
 export type Group = { id: string; name: string; deviceIds: string[] }
 
 /** A snapshot to re-apply later. Only the fields that were actually set. */
@@ -63,6 +78,21 @@ export function renameDevice(id: string, label: string) {
   const trimmed = label.trim()
   if (trimmed) d.label = trimmed
   else delete d.label
+  save()
+}
+
+export function setOutputs(id: string, outputs: Output[] | undefined) {
+  const d = store.devices.find((x) => x.id === id)
+  if (!d) return
+  if (outputs) d.outputs = outputs
+  else delete d.outputs
+  save()
+}
+
+export function renameOutput(id: string, ch: number, label: string) {
+  const o = store.devices.find((x) => x.id === id)?.outputs?.find((x) => x.ch === ch)
+  if (!o) return
+  o.label = label.trim() || `Saída ${ch}`
   save()
 }
 

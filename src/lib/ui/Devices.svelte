@@ -4,7 +4,17 @@
   } from '../ble.svelte.ts'
   import {
     store, forgetDevice, addGroup, removeGroup, renameDevice,
+    setOutputs, renameOutput, defaultOutputs,
   } from '../store.svelte.ts'
+  import { epKey } from '../endpoint.ts'
+
+  const outputsOf = (id: string) => store.devices.find((d) => d.id === id)?.outputs
+
+  /** Every selectable entry: a plain device, or one row per configured output. */
+  function keysOf(id: string): string[] {
+    const outs = outputsOf(id)
+    return outs?.length ? outs.map((o) => epKey(id, o.ch)) : [id]
+  }
 
   let editing = $state('')
   let draft = $state('')
@@ -34,14 +44,31 @@
     else selection.ids.push(id)
   }
 
-  const allSelected = $derived(list.length > 0 && selection.ids.length === list.length)
+  const allKeys = $derived(list.flatMap((c) => keysOf(c.id)))
+  const allSelected = $derived(
+    allKeys.length > 0 && allKeys.every((k) => selection.ids.includes(k)),
+  )
 
   function selectAll() {
-    selection.ids = allSelected ? [] : list.map((c) => c.id)
+    selection.ids = allSelected ? [] : allKeys
   }
 
-  function selectGroup(deviceIds: string[]) {
-    selection.ids = deviceIds.filter((id) => conns[id])
+  function selectGroup(keys: string[]) {
+    selection.ids = keys.filter((k) => conns[k.split('#')[0]])
+  }
+
+  function toggleOutputs(id: string) {
+    const has = outputsOf(id)?.length
+    setOutputs(id, has ? undefined : defaultOutputs())
+    selection.ids = selection.ids.filter((k) => !k.startsWith(id))
+  }
+
+  let editingOut = $state('')
+  let outDraft = $state('')
+
+  function commitOutRename(id: string, ch: number) {
+    renameOutput(id, ch, outDraft)
+    editingOut = ''
   }
 
   async function add() {
@@ -92,9 +119,13 @@
   {/if}
 
   {#each list as c (c.id)}
-    {@const selected = selection.ids.includes(c.id)}
+    {@const outs = outputsOf(c.id)}
+    {@const selected = keysOf(c.id).some((k) => selection.ids.includes(k))}
     <div class="card row" style:border-color={selected ? 'var(--accent)' : undefined}>
-      <input type="checkbox" checked={selected} onchange={() => toggle(c.id)} />
+      {#if !outs?.length}
+        <input type="checkbox" checked={selection.ids.includes(c.id)}
+               onchange={() => toggle(c.id)} />
+      {/if}
       <span class="dot {c.state}"></span>
       <div class="grow col" style="gap:2px">
         {#if editing === c.id}
@@ -126,6 +157,35 @@
       {/if}
       <button class="ghost danger small" onclick={() => forgetDevice(c.id)}>✕</button>
     </div>
+
+    {#if outs?.length}
+      <div class="outputs">
+        {#each outs as o (o.ch)}
+          {@const key = epKey(c.id, o.ch)}
+          <div class="card row" style:border-color={selection.ids.includes(key) ? 'var(--accent)' : undefined}>
+            <input type="checkbox" checked={selection.ids.includes(key)}
+                   onchange={() => toggle(key)} />
+            {#if editingOut === key}
+              <input type="text" bind:value={outDraft}
+                     onkeydown={(e) => e.key === 'Enter' && commitOutRename(c.id, o.ch)}
+                     onblur={() => commitOutRename(c.id, o.ch)} />
+            {:else}
+              <button class="ghost rename grow"
+                      onclick={() => { editingOut = key; outDraft = o.label }}>
+                {o.label}
+              </button>
+              <span class="small muted">ch {o.ch}</span>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
+
+    {#if c.driver.hasChannels}
+      <button class="ghost small outputs-toggle" onclick={() => toggleOutputs(c.id)}>
+        {outs?.length ? 'Remover saídas' : 'Esta controladora tem saídas separadas'}
+      </button>
+    {/if}
   {/each}
 
   <h3 style="margin:14px 0 0">Grupos</h3>
@@ -155,6 +215,20 @@
 </div>
 
 <style>
+  .outputs {
+    margin-left: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-left: 2px solid var(--line);
+    padding-left: 10px;
+  }
+
+  .outputs-toggle {
+    align-self: flex-start;
+    margin-left: 22px;
+  }
+
   .rename {
     min-height: 0;
     padding: 0;
