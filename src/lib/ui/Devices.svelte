@@ -7,6 +7,7 @@
     setOutputs, renameOutput, defaultOutputs,
   } from '../store.svelte.ts'
   import { epKey } from '../endpoint.ts'
+  import { t } from '../i18n.svelte.ts'
 
   const outputsOf = (id: string) => store.devices.find((d) => d.id === id)?.outputs
 
@@ -59,7 +60,7 @@
 
   function toggleOutputs(id: string) {
     const has = outputsOf(id)?.length
-    setOutputs(id, has ? undefined : defaultOutputs())
+    setOutputs(id, has ? undefined : defaultOutputs((n) => t('devices.output', { n })))
     selection.ids = selection.ids.filter((k) => !k.startsWith(id))
   }
 
@@ -67,7 +68,7 @@
   let outDraft = $state('')
 
   function commitOutRename(id: string, ch: number) {
-    renameOutput(id, ch, outDraft)
+    renameOutput(id, ch, outDraft, t('devices.output', { n: ch }))
     editingOut = ''
   }
 
@@ -101,10 +102,10 @@
 
 <div class="col">
   <div class="row wrap">
-    <button class="primary" onclick={add} disabled={busy}>+ Adicionar aparelho</button>
-    <button onclick={connectAll} disabled={busy || list.length === 0}>Conectar todos</button>
+    <button class="primary" onclick={add} disabled={busy}>{t('devices.add')}</button>
+    <button onclick={connectAll} disabled={busy || list.length === 0}>{t('devices.connectAll')}</button>
     <button class="ghost" onclick={selectAll} disabled={list.length === 0}>
-      {allSelected ? 'Limpar seleção' : 'Selecionar todos'}
+      {allSelected ? t('devices.clearSelection') : t('devices.selectAll')}
     </button>
   </div>
 
@@ -114,7 +115,7 @@
 
   {#if list.length === 0}
     <div class="card muted">
-      Nenhum aparelho ainda. Ligue as fitas e toque em <b>Adicionar aparelho</b>.
+      {t('devices.empty')}
     </div>
   {/if}
 
@@ -132,7 +133,7 @@
           <input
             type="text"
             bind:value={draft}
-            placeholder="Ex: Carro · fita + maçaneta + soleira"
+            placeholder={t('devices.renameHint')}
             onkeydown={(e) => e.key === 'Enter' && commitRename()}
             onblur={commitRename}
           />
@@ -140,7 +141,7 @@
           <button
             class="ghost rename"
             onclick={() => startRename(c.id, c.label ?? '')}
-            title="Renomear"
+            title={t('devices.renameHint')}
           >
             {displayName(c)}
           </button>
@@ -151,9 +152,9 @@
         {/if}
       </div>
       {#if c.state === 'online'}
-        <button class="ghost small" onclick={() => disconnect(c.id)}>Desconectar</button>
+        <button class="ghost small" onclick={() => disconnect(c.id)}>{t('devices.disconnect')}</button>
       {:else}
-        <button class="ghost small" onclick={() => connect(c.id)}>Conectar</button>
+        <button class="ghost small" onclick={() => connect(c.id)}>{t('devices.connect')}</button>
       {/if}
       <button class="ghost danger small" onclick={() => forgetDevice(c.id)}>✕</button>
     </div>
@@ -183,22 +184,22 @@
 
     {#if c.driver.hasChannels}
       <button class="ghost small outputs-toggle" onclick={() => toggleOutputs(c.id)}>
-        {outs?.length ? 'Remover saídas' : 'Esta controladora tem saídas separadas'}
+        {outs?.length ? t('devices.outputsOff') : t('devices.outputsOn')}
       </button>
     {/if}
   {/each}
 
-  <h3 style="margin:14px 0 0">Grupos</h3>
+  <h3 style="margin:14px 0 0">{t('devices.groups')}</h3>
 
   <div class="row">
     <input
       class="grow"
       type="text"
-      placeholder="Nome do grupo"
+      placeholder={t('devices.groupName')}
       bind:value={newGroupName}
     />
     <button onclick={saveGroup} disabled={!newGroupName.trim() || selection.ids.length === 0}>
-      Salvar seleção
+      {t('devices.saveSelection')}
     </button>
   </div>
 
@@ -206,9 +207,9 @@
     <div class="card row">
       <div class="grow col" style="gap:2px">
         <div class="truncate">{g.name}</div>
-        <div class="small muted">{g.deviceIds.length} aparelhos</div>
+        <div class="small muted">{t('devices.count', { n: g.deviceIds.length })}</div>
       </div>
-      <button class="ghost small" onclick={() => selectGroup(g.deviceIds)}>Selecionar</button>
+      <button class="ghost small" onclick={() => selectGroup(g.deviceIds)}>{t('devices.select')}</button>
       <button class="ghost danger small" onclick={() => removeGroup(g.id)}>✕</button>
     </div>
   {/each}

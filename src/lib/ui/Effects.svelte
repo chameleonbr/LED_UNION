@@ -1,219 +1,123 @@
 <script lang="ts">
-  import { apply, selection, targets, sendRaw } from '../ble.svelte.ts'
-  import type { Effect } from '../protocol/index.ts'
-  import {
-    isAddressable, rgbOrdersFor, spiConfigFrame, directionFrame,
-  } from '../protocol/ffe0.ts'
-  import { store, setStrip } from '../store.svelte.ts'
+  import { conns, applyTo, displayName } from '../ble.svelte.ts'
+  import { epKey } from '../endpoint.ts'
+  import { store, addScene, setLook } from '../store.svelte.ts'
+  import { t } from '../i18n.svelte.ts'
+  import DeviceCard from './DeviceCard.svelte'
+  import ColorSelect from './ColorSelect.svelte'
+  import CustomEffectEditor from './CustomEffectEditor.svelte'
 
-  let speed = $state(50)
-  let query = $state('')
-  let group = $state('')
+  /** One controllable entry: a whole device, or one of its outputs. */
+  type Logical = { key: string; conn: (typeof conns)[string]; ch?: number; label: string }
 
-  // Effect tables differ per driver; show the first selected device's set and
-  // send by id, which is what every driver in a family expects anyway.
-  const lead = $derived(targets()[0])
-  const all = $derived<Effect[]>(lead ? lead.driver.effects(lead.name) : [])
-  const groups = $derived([...new Set(all.map((e) => e.group).filter(Boolean))] as string[])
-
-  const shown = $derived(
-    all.filter(
-      (e) =>
-        (!group || e.group === group) &&
-        (!query || e.name.toLowerCase().includes(query.toLowerCase())),
-    ),
+  const logicals = $derived<Logical[]>(
+    Object.values(conns).flatMap((c) => {
+      const outs = store.devices.find((d) => d.id === c.id)?.outputs
+      if (!outs?.length) return [{ key: c.id, conn: c, label: displayName(c) }]
+      return outs.map((o) => ({
+        key: epKey(c.id, o.ch),
+        conn: c,
+        ch: o.ch,
+        // The output's own name is what the user sees; the controller name is context
+        // and lives in the card's footer.
+        label: o.label,
+      }))
+    }),
   )
 
-  const none = $derived(selection.ids.length === 0)
+  let picked = $state<Record<string, boolean>>({})
+  let sceneName = $state('')
+  let editing = $state(false)
 
-  const send = (e: Effect) => apply((d, name) => d.effect(e, name))
-  const sendSpeed = () => apply((d, name) => d.speed(speed, name), 'speed')
+  const pickedKeys = $derived(logicals.filter((l) => picked[l.key]).map((l) => l.key))
 
-  // --- addressable strip wiring -------------------------------------------------
-  // Effects only render correctly once the controller knows the strip's IC, pixel
-  // count and channel order. Wrong values look like wrong colours or a half-lit
-  // strip, not like an error, so this lives next to the effect list.
-  const addressable = $derived(!!lead && isAddressable(lead.name))
-  const saved = $derived(store.devices.find((d) => d.id === lead?.id)?.strip)
+  function saveScene() {
+    const name = sceneName.trim()
+    if (!name || pickedKeys.length === 0) return
+    addScene(name, pickedKeys)
+    sceneName = ''
+    picked = {}
+  }
 
-  let showStrip = $state(false)
-  let pixels = $state(60)
-  let order = $state(1)
-  let stripMsg = $state('')
+  // --- the Everything card ------------------------------------------------------
+  // Colour and brightness only. Effect ids are per family — 42 is one effect on
+  // LEDDMX and a different one on MELK — so broadcasting one would be arbitrary.
+  const allKeys = $derived(logicals.map((l) => l.key))
 
-  $effect(() => {
-    if (saved) {
-      pixels = saved.pixels
-      order = saved.order
-    }
-  })
+  function rgb(hex: string) {
+    const n = parseInt(hex.slice(1), 16)
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }
+  }
 
-  const orders = $derived(lead ? rgbOrdersFor(lead.name) : [])
-
-  async function applyStrip() {
-    if (!lead) return
-    stripMsg = ''
-    try {
-      const cfg = { pixels, order }
-      await sendRaw(lead.id, spiConfigFrame(lead.name, cfg))
-      setStrip(lead.id, cfg)
-      stripMsg = 'Enviado e salvo'
-    } catch (e) {
-      stripMsg = e instanceof Error ? e.message : String(e)
+  async function allColor(hex: string) {
+    const { r, g, b } = rgb(hex)
+    await applyTo(allKeys, (d, n, c) => d.rgb(r, g, b, n, c), 'rgb')
+    for (const k of allKeys) {
+      setLook(k, { colorHex: hex, effect: undefined, customEffectId: undefined })
     }
   }
 
-  // --- sound reactive ------------------------------------------------------------
-  const hasSound = $derived(!!lead?.driver.soundMode || !!lead?.driver.soundEnable)
-  let showSound = $state(false)
-  let source = $state<'mic' | 'music'>('mic')
-  let sensitivity = $state(50)
-  let soundModeId = $state(0)
-
-  const sendSoundMode = () =>
-    apply((d, name, ch) => d.soundMode?.(soundModeId, name, source, ch))
-  const sendSensitivity = () =>
-    apply((d, name) => d.soundSensitivity?.(sensitivity, name), 'sens')
-  const sendSoundEnable = (on: boolean) =>
-    apply((d, name) => d.soundEnable?.(on, name))
-
-  async function setDirection(forward: boolean) {
-    if (!lead) return
-    try {
-      await sendRaw(lead.id, directionFrame(lead.name, forward))
-      stripMsg = forward ? 'Sentido: normal' : 'Sentido: invertido'
-    } catch (e) {
-      stripMsg = e instanceof Error ? e.message : String(e)
-    }
+  async function allBrightness(v: number) {
+    await applyTo(allKeys, (d, n, c) => d.brightness(v, n, c), 'brightness')
+    for (const k of allKeys) setLook(k, { brightness: v })
   }
+
+  async function allPower(on: boolean) {
+    await applyTo(allKeys, (d, n, c) => d.power(on, n, c))
+    for (const k of allKeys) setLook(k, { power: on })
+  }
+
+  let allBright = $state(100)
 </script>
 
 <div class="col">
-  {#if none}
-    <div class="card muted">Selecione ao menos um aparelho na aba <b>Aparelhos</b>.</div>
+  {#if logicals.length === 0}
+    <div class="card muted">{t('effects.empty')}</div>
   {:else}
-    <label class="field card">
-      <span>Velocidade — {speed}%</span>
-      <input type="range" min="0" max="100" bind:value={speed} oninput={sendSpeed} />
-    </label>
+    {#each logicals as l (l.key)}
+      <DeviceCard
+        dkey={l.key}
+        conn={l.conn}
+        ch={l.ch}
+        label={l.label}
+        bind:checked={picked[l.key]}
+        onEditCustom={() => (editing = true)}
+      />
+    {/each}
 
-    {#if hasSound}
-      <div class="card col">
-        <button class="ghost row spread" onclick={() => (showSound = !showSound)}>
-          <span>Reagir ao som — {source === 'mic' ? 'microfone' : 'música do celular'}</span>
-          <span class="muted">{showSound ? '▲' : '▼'}</span>
-        </button>
-
-        {#if showSound}
-          {#if lead?.driver.soundEnable}
-            <div class="row">
-              <button class="primary grow" onclick={() => sendSoundEnable(true)}>
-                Ligar microfone
-              </button>
-              <button class="grow" onclick={() => sendSoundEnable(false)}>Desligar</button>
-            </div>
-          {/if}
-
-          {#if lead?.driver.soundMode}
-            <div class="row">
-              <button class="grow" class:primary={source === 'mic'}
-                      onclick={() => { source = 'mic'; sendSoundMode() }}>
-                Microfone
-              </button>
-              <button class="grow" class:primary={source === 'music'}
-                      onclick={() => { source = 'music'; sendSoundMode() }}>
-                Música
-              </button>
-            </div>
-            <label class="field">
-              <span>Modo — {soundModeId}</span>
-              <input type="range" min="0" max="15" bind:value={soundModeId}
-                     onchange={sendSoundMode} />
-            </label>
-          {/if}
-
-          {#if lead?.driver.soundSensitivity}
-            <label class="field">
-              <span>Sensibilidade — {sensitivity}%</span>
-              <input type="range" min="0" max="100" bind:value={sensitivity}
-                     oninput={sendSensitivity} />
-            </label>
-          {/if}
-
-          <div class="small muted">
-            Microfone é o do próprio controlador. "Música" muda o modo no aparelho, mas
-            transmitir o áudio do celular ainda não está implementado.
-          </div>
-        {/if}
-      </div>
+    {#if editing}
+      <CustomEffectEditor onclose={() => (editing = false)} />
     {/if}
 
-    {#if addressable}
-      <div class="card col">
-        <button class="ghost row spread" onclick={() => (showStrip = !showStrip)}>
-          <span>Fita endereçável — {pixels} px, {orders.find((o) => o.id === order)?.name ?? '?'}</span>
-          <span class="muted">{showStrip ? '▲' : '▼'}</span>
-        </button>
-
-        {#if showStrip}
-          <label class="field">
-            <span>Pixels</span>
-            <input type="text" inputmode="numeric" value={pixels}
-                   oninput={(e) => (pixels = Math.max(1, Math.min(65535,
-                     Number((e.currentTarget as HTMLInputElement).value) || 1)))} />
-          </label>
-
-          <label class="field">
-            <span>Ordem dos canais</span>
-            <select class="sel" bind:value={order}>
-              {#each orders as o}<option value={o.id}>{o.name}</option>{/each}
-            </select>
-          </label>
-
-          <button class="primary" onclick={applyStrip}>Aplicar configuração</button>
-          <div class="row">
-            <button class="grow" onclick={() => setDirection(true)}>Sentido normal</button>
-            <button class="grow" onclick={() => setDirection(false)}>Inverter</button>
-          </div>
-          {#if stripMsg}<div class="small muted">{stripMsg}</div>{/if}
-        {/if}
+    <div class="card col" style="border-style:dashed">
+      <strong>{t('effects.everything')}</strong>
+      <div class="small muted">{t('effects.everythingHint')}</div>
+      <div class="row">
+        <button class="primary grow" onclick={() => allPower(true)}>{t('effects.on')}</button>
+        <button class="grow" onclick={() => allPower(false)}>{t('effects.off')}</button>
       </div>
-    {/if}
+      <label class="field">
+        <span>{t('effects.color')}</span>
+        <ColorSelect onpick={allColor} />
+      </label>
+      <label class="field">
+        <span>{t('effects.brightness')} — {allBright}%</span>
+        <input type="range" min="0" max="100" bind:value={allBright}
+               oninput={() => allBrightness(allBright)} />
+      </label>
+    </div>
 
-    <input type="text" placeholder="Buscar efeito…" bind:value={query} />
-
-    {#if groups.length}
-      <div class="row wrap" style="gap:8px">
-        <button class="small" class:primary={group === ''} onclick={() => (group = '')}>
-          Todos
+    <div class="card col">
+      <strong>{t('effects.saveScene')}</strong>
+      <div class="small muted">{t('effects.pickToSave')}</div>
+      <div class="row">
+        <input class="grow" type="text" placeholder={t('effects.sceneName')}
+               bind:value={sceneName} />
+        <button class="primary" onclick={saveScene}
+                disabled={!sceneName.trim() || pickedKeys.length === 0}>
+          {t('common.save')} ({pickedKeys.length})
         </button>
-        {#each groups as g}
-          <button class="small" class:primary={group === g} onclick={() => (group = g)}>
-            {g}
-          </button>
-        {/each}
       </div>
-    {/if}
-
-    <div class="small muted">{shown.length} de {all.length} efeitos</div>
-
-    <div class="col" style="gap:6px">
-      {#each shown as e (e.group ?? '' + e.id)}
-        <button class="card row spread" style="text-align:left" onclick={() => send(e)}>
-          <span class="truncate">{e.name}</span>
-          <span class="small muted">#{e.id}</span>
-        </button>
-      {/each}
     </div>
   {/if}
 </div>
-
-<style>
-  .sel {
-    min-height: var(--tap);
-    border-radius: var(--radius);
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    padding: 0 10px;
-  }
-</style>

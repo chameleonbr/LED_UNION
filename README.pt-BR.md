@@ -92,6 +92,36 @@ Adicionar uma família é um arquivo em `src/lib/protocol/` implementando `Drive
 uma linha no registry. Os builders são funções puras, então cada um ganha um teste que
 compara os bytes com o frame documentado.
 
+## Como você controla
+
+Cada **dispositivo lógico** — uma saída física, não uma controladora — é um card próprio
+na aba Efeitos, com cor e efeito próprios. Uma controladora que alimenta uma fita e a
+maçaneta vira dois cards, então uma pode ficar azul e a outra âmbar.
+
+Um card **Todos** no fim ajusta cor e brilho de tudo de uma vez. Efeito fica de fora de
+propósito: os ids são por família, então o id 42 é um efeito no LEDDMX e outro no MELK.
+
+Marque os aparelhos que quiser e **salve uma cena**. Aplicar toca só neles e deixa o
+resto como está, reconectando quem tiver caído.
+
+O que cada card mostra é **o último comando enviado**, não uma leitura — BLE não devolve
+nada. Use o app original no meio e ele dessincroniza.
+
+## Cores e efeitos customizados
+
+A paleta é editável: escolha entre as cores salvas, adicione as suas na faixa RGB
+completa de 0–255, remova qualquer uma.
+
+Um **efeito customizado** é uma sequência ordenada de cores com velocidade e escolha
+entre pular e desvanecer. Preto conta como cor, então verde → preto → âmbar vira um
+strobe. LEDBLE, LEDDMX e BLEDIM suportam; **MELK e ELK não** — esses apps não têm
+comando de lista de cores, então o editor fica escondido nesses cards.
+
+## Idioma
+
+Inglês por padrão, mudando para o idioma do navegador quando houver tradução, com um
+seletor no cabeçalho para forçar.
+
 ## Fitas endereçáveis
 
 LEDDMX e LEDCAR controlam fitas de LED endereçáveis. Na aba **Efeitos**, com um desses

@@ -91,6 +91,37 @@ Adding a family is one file in `src/lib/protocol/` implementing `Driver`, plus o
 in the registry. The builders are pure functions, so each gets a test comparing its
 bytes against the documented frame.
 
+## How you control things
+
+Each **logical device** — one physical output, not one controller — is its own card in
+the Effects tab, with its own colour and effect. A controller driving a strip and a door
+handle shows up as two cards, so one can be blue while the other is amber.
+
+An **Everything** card at the bottom sets colour and brightness across the lot. Effect is
+deliberately not there: effect ids are per family, so id 42 is one effect on LEDDMX and a
+different one on MELK.
+
+Tick the devices you want and **save a scene**. Applying it touches only those devices
+and leaves everything else alone, reconnecting anything that dropped offline.
+
+What each card shows is **the last command sent**, not a reading — BLE gives nothing
+back. Use the vendor app in between and it will drift.
+
+## Colours and custom effects
+
+The palette is editable: pick from saved colours, add your own from the full 0–255 RGB
+range, remove any of them.
+
+A **custom effect** is an ordered colour sequence with a speed and a jump/fade choice.
+Black counts as a colour, so green → black → amber is a strobe. LEDBLE, LEDDMX and
+BLEDIM support it; **MELK and ELK do not** — those apps have no colour-list command at
+all, so the editor stays hidden on those cards.
+
+## Language
+
+English by default, switching to the browser's language when a translation exists, with
+a selector in the header to override it.
+
 ## Addressable strips
 
 LEDDMX and LEDCAR drive individually addressable strips. In the **Effects** tab, with
