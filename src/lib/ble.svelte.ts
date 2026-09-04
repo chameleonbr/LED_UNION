@@ -11,6 +11,8 @@ export type Conn = {
   driver: Driver
   state: ConnState
   error?: string
+  /** ms the link stayed up before the device dropped it, if it ever did. */
+  lastLinkMs?: number
 }
 
 type Live = {
@@ -26,6 +28,7 @@ export const conns = $state<Record<string, Conn>>({})
 export const selection = $state<{ ids: string[] }>({ ids: [] })
 
 const live = new Map<string, Live>()
+const connectedAt = new Map<string, number>()
 
 export const supported = () =>
   typeof navigator !== 'undefined' && 'bluetooth' in navigator
@@ -39,7 +42,14 @@ function track(device: BluetoothDevice, driver: Driver) {
   }
   device.addEventListener('gattserverdisconnected', () => {
     const c = conns[device.id]
-    if (c) c.state = 'offline'
+    if (c) {
+      c.state = 'offline'
+      const up = connectedAt.get(device.id)
+      // A link that dies in under a couple of seconds usually means the device
+      // expected a handshake we did not send.
+      if (up) c.lastLinkMs = Date.now() - up
+    }
+    connectedAt.delete(device.id)
     const l = live.get(device.id)
     if (l) l.char = undefined
   })
@@ -83,6 +93,44 @@ export async function addDevice(): Promise<Conn | undefined> {
   return conns[device.id]
 }
 
+const sleep = (ms: number) => new Promise<void>((r) => { setTimeout(r, ms) })
+
+/**
+ * First connects to a BLE peripheral fail often on Android — the radio is busy, the
+ * previous app has not released the link yet, or the device is mid-advertising. A
+ * couple of retries turns most of those into a success.
+ */
+async function connectGatt(device: BluetoothDevice): Promise<BluetoothRemoteGATTServer> {
+  let last: unknown
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const server = await device.gatt!.connect()
+      connectedAt.set(device.id, Date.now())
+      return server
+    } catch (e) {
+      last = e
+      if (device.gatt?.connected) device.gatt.disconnect()
+      await sleep(400 * (attempt + 1))
+    }
+  }
+  throw last
+}
+
+/** Turn a DOMException into something that says what to actually do about it. */
+function explain(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e)
+  if (/NetworkError|GATT Server is disconnected|connection attempt failed/i.test(raw)) {
+    return `${raw} — outro app pode estar segurando o aparelho; force a parada dele e tente de novo`
+  }
+  if (/No Services matching UUID|Nenhum serviço conhecido/i.test(raw)) {
+    return `${raw} — use a aba Debug para listar o que o aparelho realmente expõe`
+  }
+  if (/SecurityError|not allowed/i.test(raw)) {
+    return `${raw} — origem sem permissão; confira que a página está em HTTPS`
+  }
+  return raw
+}
+
 /**
  * Device names are not reliable (BLEDIM, LED_BLE_xx and MELK-xx all turn up), so the
  * name is only a first guess. Whichever driver's service and characteristic actually
@@ -93,16 +141,34 @@ async function resolveDriver(
   guess: Driver,
 ): Promise<{ driver: Driver; char: BluetoothRemoteGATTCharacteristic }> {
   const order = [guess, ...drivers.filter((d) => d !== guess)]
+  const seen: string[] = []
   for (const driver of order) {
+    let service: BluetoothRemoteGATTService
     try {
-      const service = await server.getPrimaryService(driver.service)
-      const char = await service.getCharacteristic(driver.writeChar)
-      return { driver, char }
+      service = await server.getPrimaryService(driver.service)
     } catch {
-      // Wrong family — try the next one.
+      continue // Different family.
+    }
+
+    // The documented characteristic is the happy path, but vendors reuse the same
+    // service with a different write handle — BLEDIM does. Any writable
+    // characteristic in the right service beats refusing to connect.
+    try {
+      return { driver, char: await service.getCharacteristic(driver.writeChar) }
+    } catch {
+      const chars = await service.getCharacteristics()
+      seen.push(...chars.map((c) => c.uuid.slice(4, 8)))
+      const writable = chars.find(
+        (c) => c.properties.write || c.properties.writeWithoutResponse,
+      )
+      if (writable) return { driver, char: writable }
     }
   }
-  throw new Error('Nenhum serviço conhecido encontrado neste aparelho')
+  throw new Error(
+    seen.length
+      ? `Serviço encontrado, mas sem característica gravável. Vistas: ${seen.join(', ')}`
+      : 'Nenhum serviço conhecido encontrado neste aparelho',
+  )
 }
 
 export async function connect(id: string): Promise<void> {
@@ -114,7 +180,7 @@ export async function connect(id: string): Promise<void> {
   c.state = 'connecting'
   c.error = undefined
   try {
-    const server = await l.device.gatt!.connect()
+    const server = await connectGatt(l.device)
     const resolved = await resolveDriver(server, c.driver)
     if (resolved.driver !== c.driver) {
       c.driver = resolved.driver
@@ -129,8 +195,8 @@ export async function connect(id: string): Promise<void> {
     }
   } catch (e) {
     c.state = 'error'
-    c.error = e instanceof Error ? e.message : String(e)
-    throw e
+    c.error = explain(e)
+    throw new Error(c.error)
   }
 }
 
@@ -206,7 +272,7 @@ function propsOf(ch: BluetoothRemoteGATTCharacteristic): string[] {
 export async function inspect(id: string): Promise<ServiceInfo[]> {
   const l = live.get(id)
   if (!l) throw new Error('Aparelho não pareado nesta sessão')
-  const server = await l.device.gatt!.connect()
+  const server = await connectGatt(l.device)
 
   let services: BluetoothRemoteGATTService[] = []
   try {
@@ -246,10 +312,9 @@ export async function sendRaw(
   const l = live.get(id)
   const c = conns[id]
   if (!l || !c) throw new Error('Aparelho não pareado nesta sessão')
-  if (c.state !== 'online') await connect(id)
 
   if (charUuid && charUuid !== l.char?.uuid) {
-    const server = await l.device.gatt!.connect()
+    const server = await connectGatt(l.device)
     for (const service of await server.getPrimaryServices()) {
       for (const ch of await service.getCharacteristics()) {
         if (ch.uuid === charUuid) {
@@ -260,6 +325,7 @@ export async function sendRaw(
     }
     throw new Error(`Característica ${charUuid} não encontrada`)
   }
+  if (c.state !== 'online') await connect(id)
   await l.queue.push(() => writeRaw(l, frame))
 }
 

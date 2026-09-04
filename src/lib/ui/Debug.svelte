@@ -1,6 +1,6 @@
 <script lang="ts">
   import {
-    conns, connect, inspect, sendRaw, parseHex,
+    conns, inspect, sendRaw, parseHex,
     type ServiceInfo,
   } from '../ble.svelte.ts'
 
@@ -29,10 +29,15 @@
     busy = true
     services = []
     try {
-      await connect(deviceId)
+      // Deliberately not connect() first: driver resolution is exactly what fails
+      // on an unknown device, and we still want to see what it exposes.
       services = await inspect(deviceId)
       const n = services.reduce((a, s) => a + s.chars.length, 0)
       note(`${services.length} serviço(s), ${n} característica(s)`)
+      const dropped = conns[deviceId]?.lastLinkMs
+      if (dropped !== undefined && dropped < 3000) {
+        note(`aviso: aparelho derrubou o link em ${dropped}ms — cheira a handshake faltando`)
+      }
       if (!charUuid && writable.length) charUuid = writable[0]
     } catch (e) {
       note(`ERRO: ${e instanceof Error ? e.message : String(e)}`)
