@@ -24,6 +24,10 @@ def main():
                  for r in tsv("elk_effects.tsv", ["id", "name"])]),
         ("ledble", [{"id": int(r["id"]), "name": r["name"]}
                     for r in tsv("ble_mode.tsv", ["id", "name"])]),
+        ("ledcar", [{"id": int(r["id"]), "name": r["name"]}
+                    for r in tsv("car_mode.tsv", ["id", "name"])]),
+        ("leddmx", [{"id": int(r["id"]), "name": r["name"]}
+                    for r in tsv("dmx_model.tsv", ["id", "name"])]),
     ]
     with open(OUT, "w") as fh:
         fh.write("// GENERATED from docs/protocol/*.tsv by tools/gen-effects.py"
@@ -34,7 +38,7 @@ def main():
             for r in rows:
                 fh.write("  " + json.dumps(r, ensure_ascii=False) + ",\n")
             fh.write("]\n\n")
-        fh.write("export default { melk, elk, ledble }\n")
+        fh.write("export default { melk, elk, ledble, ledcar, leddmx }\n")
     print(OUT, {n: len(r) for n, r in tables})
 
 

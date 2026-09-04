@@ -153,3 +153,75 @@ test('ffe0 puts the channel in byte 7, and keeps the default without one', async
   assert.equal(ffe0.power(true, 'LEDBLE-00', 2)[7], 2)
   assert.equal(ffe0.hasChannels, true)
 })
+
+test('ffe0 routes each name prefix to the right wire layout', async () => {
+  const { layoutFor } = await import('./ffe0.ts')
+  assert.equal(layoutFor('LEDBLE-00-9B67'), 'ble')
+  assert.equal(layoutFor('LED_BLE_00203032'), 'ble')
+  assert.equal(layoutFor('LEDSTAGE-1'), 'ble')
+  assert.equal(layoutFor('LEDCAR-00-ABCD'), 'ble')
+  assert.equal(layoutFor('LEDCAR-01-ABCD'), 'dmx')
+  assert.equal(layoutFor('LEDDMX-00-ABCD'), 'dmx')
+  assert.equal(layoutFor('LEDDMX-03-ABCD'), 'dmx')
+  assert.equal(layoutFor('LEDDMX-02-ABCD'), 'dmxs')
+  assert.equal(layoutFor('LEDDMX-04-ABCD'), 'dmxs')
+  assert.equal(layoutFor('LEDCAR-02-ABCD'), 'dmxs')
+})
+
+test('LEDDMX 7B FF frames match docs/protocol/ledble.md', () => {
+  const n = 'LEDDMX-00-ABCD'
+  assert.equal(hex(ffe0.power(true, n)), '7b 04 04 01 ff ff ff ff bf')
+  assert.equal(hex(ffe0.power(false, n)), '7b 04 04 00 ff ff ff ff bf')
+  assert.equal(hex(ffe0.rgb(255, 0, 0, n)), '7b ff 07 ff 00 00 00 ff bf')
+  assert.equal(hex(ffe0.speed(50, n)), '7b ff 02 32 ff 00 ff ff bf')
+  assert.equal(hex(ffe0.effect({ id: 7, name: 'x' }, n)), '7b ff 13 07 ff ff ff ff bf')
+  // This family sends brightness twice: scaled to 0..32, then raw.
+  assert.equal(hex(ffe0.brightness(100, n)), '7b ff 01 20 64 00 ff ff bf')
+  assert.equal(hex(ffe0.brightness(50, n)), '7b ff 01 10 32 00 ff ff bf')
+  assert.equal(hex(ffe0.brightness(0, n)), '7b ff 01 00 00 00 ff ff bf')
+})
+
+test('LEDDMX-02 and LEDCAR-02 shift every parameter one byte left', () => {
+  const n = 'LEDDMX-02-ABCD'
+  assert.equal(hex(ffe0.power(true, n)), '7b 04 01 ff ff ff ff ff bf')
+  assert.equal(hex(ffe0.rgb(255, 0, 0, n)), '7b 07 ff 00 00 00 ff ff bf')
+  assert.equal(hex(ffe0.brightness(50, n)), '7b 01 32 00 ff ff ff ff bf')
+  assert.equal(hex(ffe0.speed(50, n)), '7b 02 32 00 ff ff ff ff bf')
+  assert.equal(hex(ffe0.effect({ id: 7, name: 'x' }, n)), '7b 13 07 ff ff ff ff ff bf')
+  assert.equal(hex(ffe0.cct!(30, 70, n)), '7b 0a 46 ff ff ff ff ff bf')
+  assert.equal(hex(ffe0.white!(75, n)), '7b 07 00 00 00 4b ff ff bf')
+  // LEDCAR-02 shares the layout.
+  assert.equal(hex(ffe0.power(true, 'LEDCAR-02-1')), '7b 04 01 ff ff ff ff ff bf')
+})
+
+test('every family emits 9 bytes with the right header and trailer', () => {
+  const cases: Array<[string, number, number]> = [
+    ['LEDBLE-00-1', 0x7e, 0xef],
+    ['LEDCAR-00-1', 0x7e, 0xef],
+    ['LEDDMX-00-1', 0x7b, 0xbf],
+    ['LEDCAR-01-1', 0x7b, 0xbf],
+    ['LEDDMX-02-1', 0x7b, 0xbf],
+    ['LEDCAR-02-1', 0x7b, 0xbf],
+  ]
+  for (const [name, head, tail] of cases) {
+    for (const frame of [
+      ffe0.power(true, name),
+      ffe0.rgb(1, 2, 3, name),
+      ffe0.brightness(50, name),
+      ffe0.speed(50, name),
+      ffe0.effect({ id: 9, name: 'x' }, name),
+    ]) {
+      assert.equal(frame.length, 9, name)
+      assert.equal(frame[0], head, `${name} header`)
+      assert.equal(frame[8], tail, `${name} trailer`)
+    }
+  }
+})
+
+test('effect tables are picked per family', () => {
+  assert.equal(ffe0.effects('LEDBLE-00-1').length, 23)
+  assert.equal(ffe0.effects('LEDCAR-01-1').length, 23)
+  assert.equal(ffe0.effects('LEDDMX-00-1').length, 211)
+  assert.equal(driverFor('LEDDMX-00-ABCD')?.id, 'ffe0')
+  assert.equal(driverFor('LEDCAR-02-ABCD')?.id, 'ffe0')
+})
