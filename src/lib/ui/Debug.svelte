@@ -60,18 +60,50 @@
     }
   }
 
-  // First column is the 7E family used by ELK/MELK; second is the public BLEDOM
-  // variant with byte 1 = 0x00. Whichever makes the strip react tells us the family.
-  const presets: Array<[string, string]> = [
-    ['ligar', '7E 04 04 01 00 01 FF 00 EF'],
-    ['apagar', '7E 04 04 00 00 00 FF 00 EF'],
-    ['vermelho', '7E 07 05 03 FF 00 00 10 EF'],
-    ['verde', '7E 07 05 03 00 FF 00 10 EF'],
-    ['brilho 100', '7E 04 01 64 FF FF FF 00 EF'],
-    ['BLEDOM ligar', '7E 00 04 01 00 00 00 00 EF'],
-    ['BLEDOM vermelho', '7E 00 05 03 FF 00 00 00 EF'],
-    ['BLEDOM apagar', '7E 00 04 00 00 00 00 00 EF'],
+  /**
+   * Candidate power-on frames from both sources: the decompiled apps and the
+   * elkbledom project's hardware sniffing. Byte 1 and the padding differ between
+   * firmwares, so for an unknown device the fastest identification is to fire each
+   * one and watch which makes the strip react. See docs/protocol/variants.md.
+   */
+  const candidates: Array<[string, string]> = [
+    ['A · ELK app', '7E 04 04 01 00 01 FF 00 EF'],
+    ['B · ELK hw', '7E 04 04 F0 00 01 FF 00 EF'],
+    ['C · byte1=00', '7E 00 04 01 00 00 00 00 EF'],
+    ['D · byte1=FF', '7E FF 04 01 00 FF FF 00 EF'],
+    ['E · ELK 07', '7E 07 04 01 00 01 FF 00 EF'],
   ]
+
+  const presets: Array<[string, string]> = [
+    ['apagar', '7E 04 04 00 00 00 FF 00 EF'],
+    ['vermelho app', '7E 07 05 03 FF 00 00 10 EF'],
+    ['vermelho hw', '7E 07 05 03 FF 00 00 0A EF'],
+    ['vermelho 00', '7E 00 05 03 FF 00 00 00 EF'],
+    ['brilho 100', '7E 04 01 64 FF FF FF 00 EF'],
+    ['login MELK 1', '7E 07 83'],
+    ['login MELK 2', '7E 04 04'],
+    ['consultar', '7E 00 01 FA 00 00 00 00 EF'],
+  ]
+
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+  /** Fire every candidate with a gap, so the one that works is visible. */
+  async function sweep() {
+    if (!deviceId) return
+    busy = true
+    note('--- varredura: olhe a fita e anote qual letra acendeu ---')
+    for (const [label, frame] of candidates) {
+      try {
+        await sendRaw(deviceId, parseHex(frame), charUuid || undefined)
+        note(`${label}  →  ${frame}`)
+      } catch (e) {
+        note(`${label}  ERRO: ${e instanceof Error ? e.message : String(e)}`)
+      }
+      await wait(1500)
+    }
+    note('--- fim da varredura ---')
+    busy = false
+  }
 </script>
 
 <div class="col">
@@ -118,6 +150,9 @@
       <input type="text" bind:value={hex} style="font-family:ui-monospace,monospace" />
     </label>
     <button class="primary" onclick={send} disabled={!deviceId || busy}>Enviar</button>
+    <button onclick={sweep} disabled={!deviceId || busy}>
+      Varrer candidatos de ligar (5 × 1,5 s)
+    </button>
     <div class="row wrap" style="gap:6px">
       {#each presets as [label, frame]}
         <button class="small" onclick={() => { hex = frame; send() }} disabled={!deviceId || busy}>
