@@ -98,8 +98,8 @@ test('device names route to the right driver', () => {
   assert.equal(driverFor('XSL-Light')?.id, 'fff0')
   assert.equal(driverFor('LEDBLE-00-9B07')?.id, 'ffe0')
   assert.equal(driverFor('LED_BLE_00203032')?.id, 'ffe0')
-  // BLEDIM shares the FFF0 service but not the protocol — it must not match fff0.
-  assert.equal(driverFor('BLEDIM'), undefined)
+  // BLEDIM shares the FFF0 service but not the protocol, so it gets its own driver.
+  assert.equal(driverFor('BLEDIM')?.id, 'bledim')
   assert.equal(driverFor('Some Random Speaker'), undefined)
 })
 
@@ -224,4 +224,75 @@ test('effect tables are picked per family', () => {
   assert.equal(ffe0.effects('LEDDMX-00-1').length, 211)
   assert.equal(driverFor('LEDDMX-00-ABCD')?.id, 'ffe0')
   assert.equal(driverFor('LEDCAR-02-ABCD')?.id, 'ffe0')
+})
+
+test('bledim frames carry a valid header, length and checksum', async () => {
+  const { bledim, frame, serialCodeFrame } = await import('./bledim.ts')
+
+  const f = frame(0x80, [1])
+  assert.equal(f.length, 8, '6 header + 1 payload + 1 checksum')
+  assert.equal(f[0], 0x55)
+  assert.equal(f[1], 0xaa)
+  assert.equal(f[3], 0x80)
+  assert.equal(f[4], 0x00, 'length high byte')
+  assert.equal(f[5], 0x01, 'length low byte counts payload only')
+  // Checksum is an additive sum of everything before it, sync bytes included.
+  let sum = 0
+  for (let i = 0; i < f.length - 1; i++) sum += f[i]
+  assert.equal(f[f.length - 1], sum & 0xff)
+
+  // Length is big-endian across both bytes.
+  const big = frame(0x82, new Array(300).fill(0))
+  assert.equal(big[4], 1)
+  assert.equal(big[5], 300 - 256)
+  assert.equal(big.length, 6 + 300 + 1)
+
+  // The sequence byte advances so two identical commands differ on the wire.
+  assert.notEqual(frame(0x80, [1])[2], frame(0x80, [1])[2])
+
+  const auth = serialCodeFrame(new Date(2026, 8, 4, 12, 0, 30, 200))
+  assert.equal(auth[3], 0x89)
+  assert.equal(auth[5], 2)
+  assert.equal(auth[6], 30, 'seconds')
+  assert.equal(auth[7], 200, 'milliseconds & 0xff')
+
+  assert.equal(bledim.writeWithResponse, true)
+  assert.equal(bledim.chunkSize, 20)
+})
+
+test('bledim commands match docs/protocol/bledim.md', async () => {
+  const { bledim } = await import('./bledim.ts')
+  const body = (f: Uint8Array) => [...f.subarray(6, f.length - 1)]
+
+  assert.deepEqual(body(bledim.power(true, 'BLEDIM')), [1])
+  assert.deepEqual(body(bledim.power(false, 'BLEDIM')), [0])
+  // Colour payload is W, R, G, B — white first.
+  assert.deepEqual(body(bledim.rgb(10, 20, 30, 'BLEDIM')), [0, 10, 20, 30])
+  assert.deepEqual(body(bledim.white!(100, 'BLEDIM')), [255, 0, 0, 0])
+
+  // Percent in, 0..255 on the wire, and speed/brightness share one command.
+  const bright = body(bledim.brightness(100, 'BLEDIM'))
+  assert.equal(bright.length, 6)
+  assert.equal(bright[0], 0xff, 'free scene')
+  assert.equal(bright[3], 255, 'brightness scaled to 0..255')
+  const slow = body(bledim.speed(0, 'BLEDIM'))
+  assert.equal(slow[2], 0, 'speed scaled')
+  assert.equal(slow[3], 255, 'brightness survives a speed change')
+
+  // An effect ships a whole 72-byte scene, with the id in byte 14 plus the chase bit.
+  const eff = bledim.effect({ id: 4, name: 'M5' }, 'BLEDIM')
+  assert.equal(eff.length, 6 + 72 + 1, 'SCENE_PACKET_SIZE is 79')
+  assert.equal(body(eff)[14], 0x84, 'id 4 with bit 7 set')
+  assert.equal(bledim.effects('BLEDIM').length, 13)
+})
+
+test('bledim claims only genuine names, never clone modules or the ELK family', async () => {
+  assert.equal(driverFor('BLEDIM')?.id, 'bledim')
+  assert.equal(driverFor('LanQianTech')?.id, 'bledim')
+  // Default names of bare BLE-UART modules — the original app treats these as fakes.
+  assert.equal(driverFor('JDY-10'), undefined)
+  assert.equal(driverFor('Ble_Light'), undefined)
+  // Same service, different protocol — these must still reach fff0.
+  assert.equal(driverFor('MELK-OC')?.id, 'fff0')
+  assert.equal(driverFor('ELK-BLEDOM')?.id, 'fff0')
 })

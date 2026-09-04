@@ -42,6 +42,12 @@ export type Driver = {
   effect(e: Effect, name: string, ch?: number): Uint8Array
   /** True when the family puts an output selector in the frame. */
   hasChannels?: boolean
+  /** Split writes into chunks of this many bytes. Undefined sends the frame whole. */
+  chunkSize?: number
+  /** Some families need write-with-response; most take write-without-response. */
+  writeWithResponse?: boolean
+  /** Outputs this controller exposes, when the count is fixed by the protocol. */
+  channelValues?: number[]
   /** pct 0..100 */
   white?(pct: number, name: string): Uint8Array
   /** warm/cool 0..100 */

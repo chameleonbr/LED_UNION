@@ -17,7 +17,7 @@ efeito ou cena de uma vez só.
 | LEDDMX-00/01/03, LEDCAR-01 | `FFE0` / `FFE1` | ✅ implementado (`7B FF … BF`) |
 | LEDDMX-02/04, LEDCAR-02 | `FFE0` / `FFE1` | ✅ implementado (`7B … BF`, deslocado) |
 | LEDSMART / LEDSUN / LEDLIKE / LEDPHO | `FFE0` / `FFE1` | 📄 documentado, não implementado |
-| BLEDIM | desconhecido | ❌ ver `docs/protocol/bledim.md` |
+| BLEDIM / LanQianTech | `FFF0` / **`FFF1`** | ✅ implementado (`55 AA`, tam. variável) |
 
 O driver `ffe0` está **confirmado em hardware**: conexão, handshake `2A` e comando de
 cor funcionam num LEDBLE-00 real. As demais famílias continuam derivadas da

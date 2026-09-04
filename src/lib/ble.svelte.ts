@@ -202,7 +202,7 @@ export async function connect(id: string): Promise<void> {
     c.state = 'online'
     // Some families ignore every command until they get a handshake frame.
     for (const frame of c.driver.onConnect?.(c.name) ?? []) {
-      await l.queue.push(() => writeRaw(l, frame))
+      await l.queue.push(() => writeRaw(l, frame, c.driver))
     }
   } catch (e) {
     c.state = 'error'
@@ -218,13 +218,21 @@ export function disconnect(id: string) {
   if (c) c.state = 'offline'
 }
 
-async function writeRaw(l: Live, frame: Uint8Array) {
-  const char = l.char
-  if (!char) throw new Error('Não conectado')
-  const buf = frame as unknown as BufferSource
+const sleepMs = (ms: number) => new Promise<void>((r) => { setTimeout(r, ms) })
+
+async function writeOnce(
+  char: BluetoothRemoteGATTCharacteristic,
+  part: Uint8Array,
+  withResponse: boolean,
+) {
+  const buf = part as unknown as BufferSource
+  if (withResponse) {
+    await char.writeValue(buf)
+    return
+  }
   try {
-    // These controllers advertise write-without-response, which is also the only
-    // mode fast enough for a colour slider.
+    // Most of these controllers advertise write-without-response, which is also the
+    // only mode fast enough for a colour slider.
     await char.writeValueWithoutResponse(buf)
   } catch (e) {
     if (e instanceof DOMException && e.name === 'NotSupportedError') {
@@ -232,6 +240,24 @@ async function writeRaw(l: Live, frame: Uint8Array) {
       return
     }
     throw e
+  }
+}
+
+async function writeRaw(l: Live, frame: Uint8Array, driver?: Driver) {
+  const char = l.char
+  if (!char) throw new Error('Não conectado')
+  const chunk = driver?.chunkSize
+  const withResponse = driver?.writeWithResponse ?? false
+
+  if (!chunk || frame.length <= chunk) {
+    await writeOnce(char, frame, withResponse)
+    return
+  }
+  // Families with a fixed MTU assumption split the frame themselves and pace the
+  // pieces; the gap is the only flow control they have.
+  for (let i = 0; i < frame.length; i += chunk) {
+    if (i > 0) await sleepMs(driver?.minGapMs ?? 30)
+    await writeOnce(char, frame.subarray(i, i + chunk), withResponse)
   }
 }
 
@@ -258,7 +284,7 @@ export async function apply(
       if (c.state !== 'online') await connect(deviceId)
       const frame = build(c.driver, c.name, ch)
       if (!frame) return
-      const op = () => writeRaw(l, frame)
+      const op = () => writeRaw(l, frame, c.driver)
       // Coalescing is per output, or two outputs would cancel each other out.
       return coalesceKey
         ? l.queue.pushLatest(`${coalesceKey}:${ch ?? ''}`, op)
@@ -336,7 +362,7 @@ export async function sendRaw(
     for (const service of await server.getPrimaryServices()) {
       for (const ch of await service.getCharacteristics()) {
         if (ch.uuid === charUuid) {
-          await l.queue.push(() => writeRaw({ ...l, char: ch }, frame))
+          await l.queue.push(() => writeRaw({ ...l, char: ch }, frame, c.driver))
           return
         }
       }
@@ -344,6 +370,6 @@ export async function sendRaw(
     throw new Error(`Característica ${charUuid} não encontrada`)
   }
   if (c.state !== 'online') await connect(id)
-  await l.queue.push(() => writeRaw(l, frame))
+  await l.queue.push(() => writeRaw(l, frame, c.driver))
 }
 

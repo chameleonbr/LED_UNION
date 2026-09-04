@@ -13,20 +13,106 @@ Anuncia o mesmo serviço `FFF0` da família ELK/MELK, mas **escreve em `FFF1`, n
 `FFF3`**, e o protocolo não tem nenhuma relação com o envelope `7E … EF` daquela
 família. Tratar como driver próprio.
 
+Detalhes de GATT que diferem de todas as outras famílias:
+
+| item | valor |
+|---|---|
+| write type | **com resposta** (`setWriteType(1)`) |
+| fragmentação | **20 bytes fixos**, obrigatória |
+| intervalo | 30 ms por fragmento (15 ms com múltiplos GATTs) |
+| notify | mesma característica `FFF1` |
+| CCCD `0x2902` | o app **não** escreve; hardware real notifica sem isso |
+| MTU | nunca negociado |
+
+O app dispara os fragmentos sem esperar `onCharacteristicWrite` — o intervalo é o
+único controle de fluxo que existe.
+
 ## Enquadramento
 
 Pacote de **comprimento variável**, não os 9 bytes fixos das outras famílias:
 
 ```
-55 AA <?> <cmd> <lenHi> <lenLo> <payload…> <tail>
+55 AA <seq> <cmd> <lenHi> <lenLo> <payload…> <checksum>
+ [0] [1]  [2]    [3]     [4]      [5]    [6 .. 6+len-1]   [6+len]
 ```
 
 - `55 AA` — sync (`SYNC_HB = 85`, `SYNC_LB = 170`)
-- cabeçalho de **6 bytes** (`PROTOCOL_HEADER_SIZE`), cabeçalho + cauda = **7**
-- comprimento em **big-endian**: o receptor calcula
-  `packetSize = buf[4] * 256 + buf[5] + 7`
-- há um byte de cauda (checksum) — ao contrário de todas as outras famílias, que
-  não têm checksum nenhum
+- `<seq>` — contador livre 0..255; o aparelho não valida
+- **comprimento conta só o payload**, big-endian; quadro total = `len + 7`
+- receptor: `packetSize = buf[4] * 256 + buf[5] + 7`
+
+### Checksum
+
+Soma aditiva simples — não XOR — de **todos os bytes antes dele**, sync e cabeçalho
+inclusive:
+
+```
+sum = 0
+for i in 0 .. len(frame)-2: sum += frame[i]
+checksum = sum & 0xFF
+```
+
+## Payloads
+
+| comando | len | payload |
+|---|---|---|
+| `0x80` power | 1 | `[0\|1]` — sem canal |
+| `0x81` cor | 4 | `[W, R, G, B]` — **branco primeiro**, 0..255 |
+| `0x88` vel/brilho | 6 | `[sceneNo, saveFlag, speed, brightness, strobe, 0]` |
+| `0x86` canais | 1 | `[1..4]` — 1=DIM 2=CCT 3=RGB 4=RGBW |
+| `0x82` efeito | 72 | estrutura de cena completa (abaixo) |
+| `0x87` consulta | 1 | `[seletor]` |
+| `0x8C` sensib. áudio | 1 | `[0..255]` |
+| `0x8D` cor salva | 6 | `[0, R, G, B, 0, 0]` |
+
+**Escalas são 0..255**, não 0..100 como nas outras famílias.
+
+Em `0x88`: `sceneNo = 255` significa modo livre; `saveFlag = 1` confirma, `0` é
+arrasto ao vivo. Velocidade e brilho viajam **no mesmo comando**, então mudar um
+exige lembrar o outro. Padrões: speed 192, brightness 255, strobe 0.
+
+### Estrutura de cena (72 bytes, comando `0x82`)
+
+Quadro total = 72 + 7 = **79** (`SCENE_PACKET_SIZE`).
+
+| offset | campo |
+|---|---|
+| 0 | fade (0/1) |
+| 1 | speed |
+| 2 | brightness |
+| 3 | quantidade de cores (0..14) |
+| 4 | número da cena |
+| 6 | strobe |
+| 11 | canal 4 = W |
+| 12 | largura da cor |
+| 13 | índice da cor |
+| **14** | **id do efeito**: bits 0-6 = índice 0..12, bit 7 = modo chase |
+| 16..71 | até 14 entradas de cor × 4 bytes `[W, R, G, B]` |
+
+Byte 14 igual a `255` significa "sem efeito" — cena de cor estática. A UI rotula
+`M1..M13` a partir do índice, e o app não tem nomes próprios para eles.
+
+## Handshake / binding
+
+`Encrypt.java` não faz criptografia: é uma tabela ASCII de 240 bytes e três funções
+de consulta. O fluxo:
+
+1. Ao conectar, o app envia `0x89` com `[segundos, milissegundos & 0xFF]` do relógio,
+   e calcula localmente duas senhas a partir desses dois nonces.
+2. O aparelho responde `0x92`. Na variante atual a verificação é
+   `getCmdPass(rcv[2]) + password2 == rcv[13]*256 + rcv[14]` — onde `rcv[2]` é o
+   número de pacote **do próprio aparelho**. É desafio/resposta real, com dois nonces.
+3. Repete a cada tick até 10 tentativas, depois desconecta.
+
+**Mas o portão é só do lado do cliente.** `mblRegisterd` é um booleano do app; nada
+demonstra que o aparelho recuse comandos não autenticados. Um cliente limpo pode
+enviar comandos direto. Mandamos o `0x89` mesmo assim: é o que faz o aparelho
+reportar o estado dele de volta.
+
+### Checagem de clone
+
+`IsFake()` marca como falso o aparelho cujo nome seja `JDY-10` ou `Ble_Light` — nomes
+de fábrica de módulos BLE-UART genéricos. Nomes legítimos: `BLEDIM` e `LanQianTech`.
 
 ## Comandos (`Protocol.java`)
 

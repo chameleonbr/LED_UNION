@@ -1,11 +1,14 @@
 import type { Driver } from './types.ts'
 import { fff0 } from './fff0.ts'
 import { ffe0 } from './ffe0.ts'
+import { bledim } from './bledim.ts'
 
 export * from './types.ts'
-export { fff0, ffe0 }
+export { fff0, ffe0, bledim }
 
-export const drivers: Driver[] = [fff0, ffe0]
+// bledim shares fff0's service, so it must be probed first — matching is by name
+// and the service alone cannot tell them apart.
+export const drivers: Driver[] = [bledim, fff0, ffe0]
 
 export const driverFor = (name: string): Driver | undefined =>
   drivers.find((d) => d.matches(name))
