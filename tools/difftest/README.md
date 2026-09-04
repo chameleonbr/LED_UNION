@@ -1,40 +1,45 @@
-# Teste diferencial
+# Differential testing
 
-Os drivers em `src/lib/protocol/` foram transcritos **à mão** a partir do Java
-decompilado dos apps originais. Testes escritos à mão não pegam erro de transcrição:
-eles verificam o que eu entendi, não o que o app faz.
+*[Leia em português](README.pt-BR.md)*
 
-Este teste compara mecanicamente as duas coisas.
+The drivers in `src/lib/protocol/` were transcribed **by hand** from the decompiled
+Java of the original apps. Hand-written tests cannot catch a transcription error: they
+assert what the author understood, not what the app does.
 
-## Como funciona
+This compares the two mechanically.
 
-1. **`extract_java_frames.py`** varre as árvores decompiladas e extrai todo frame BLE
-   que o app monta, em três formas diferentes:
-   - `new byte[]{…}` — literal (LED+LAMP)
-   - `byte[] x = {…}` — inicializador nu (Lotus Lantern)
-   - `buf[0] = 85; buf[1] = -86; …` — atribuição indexada (Magic Lantern, BLEDIM)
+## How it works
 
-   Duas armadilhas que custaram caro e estão tratadas:
-   - o jadx **re-aliasa o mesmo buffer** dentro de um método
-     (`byte[] bArr = sendDatas2; … byte[] bArr2 = sendDatas2;`), espalhando um frame
-     por vários nomes. Sem resolver aliases, todo frame sai truncado.
-   - o jadx resolve inteiros comuns para constantes de bibliotecas sem relação
-     (`WebSocketProtocol.PAYLOAD_SHORT` = 126 = `0x7E`). São artefatos do decompilador.
+1. **`extract_java_frames.py`** walks the decompiled trees and extracts every BLE frame
+   the apps build, in three different shapes:
+   - `new byte[]{…}` — a literal (LED+LAMP)
+   - `byte[] x = {…}` — a bare initialiser (Lotus Lantern)
+   - `buf[0] = 85; buf[1] = -86; …` — indexed assignment (Magic Lantern, BLEDIM)
 
-2. **`emit_ts_frames.ts`** roda nossos drivers com valores de sonda distintos
-   (`R=0x11 G=0x22 B=0x33`, para que uma posição trocada salte aos olhos) e emite JSON.
+   Two traps that cost real time, both handled:
+   - jadx **re-aliases the same buffer** inside a method
+     (`byte[] bArr = sendDatas2; … byte[] bArr2 = sendDatas2;`), scattering one frame
+     across several names. Without resolving aliases every frame comes out truncated —
+     Magic Lantern yielded 5 frames instead of 17, which reads as "no coverage" rather
+     than "broken extractor".
+   - jadx resolves ordinary integers to unrelated library constants that happen to
+     share the value (`WebSocketProtocol.PAYLOAD_SHORT` = 126 = `0x7E`). These are
+     decompiler artifacts, not dependencies.
 
-3. **`compare.py`** casa cada frame nosso contra os literais da mesma família. Um
-   literal casa se todas as posições que ele fixa em constante forem iguais às nossas;
-   posições que ele preenche a partir de variável ficam livres.
+2. **`emit_ts_frames.ts`** runs our drivers with distinctive probe values
+   (`R=0x11 G=0x22 B=0x33`, so a swapped position is obvious) and emits JSON.
 
-   - **exato** — mesmo comprimento, todas as posições fixas conferem
-   - **prefixo** — o app copia o payload em loop, então o literal só fixa o cabeçalho
-     (só o frame de cena do BLEDIM cai aqui)
-   - **sem correspondência** — não existe frame nenhum daquela forma no app original.
-     Isso é erro nosso.
+3. **`compare.py`** matches each of our frames against the literals of the same family.
+   A literal matches when every position it pins to a constant equals ours; positions
+   it fills from a variable are free.
 
-## Rodar
+   - **exact** — same length, every fixed position agrees
+   - **prefix** — the app memcpy's the payload, so the literal only pins the header
+     (only BLEDIM's scene frame lands here)
+   - **unmatched** — no frame of that shape exists in the original app at all. That is
+     our bug.
+
+## Running it
 
 ```bash
 python3 tools/difftest/extract_java_frames.py targets.json > java.json
@@ -42,90 +47,93 @@ node tools/difftest/emit_ts_frames.ts > ts.json
 python3 tools/difftest/compare.py java.json ts.json
 ```
 
-`targets.json` é uma lista de `{"app": "...", "path": "..."}` apontando para as
-árvores decompiladas (arquivo ou diretório).
+`targets.json` is a list of `{"app": "...", "path": "..."}` pointing at the decompiled
+trees (a file or a directory).
 
-## Resultado
+## Result
 
-**170 de 170 frames casam** com os apps originais, em três drivers e nove layouts.
-Um casa só por prefixo (a cena de 72 bytes do BLEDIM, cujo payload é copiado em loop).
+**221 of 221 frames match** the original apps, across three drivers and nine wire
+layouts. One matches by prefix only — BLEDIM's 72-byte scene, whose payload is copied
+in a loop.
 
-### O que isso pegou
+### What it caught
 
-**Cinco bugs**, todos invisíveis para teste escrito à mão — porque meus testes
-afirmavam exatamente o que eu tinha entendido errado.
+**Five bugs**, all invisible to hand-written tests, because those tests asserted
+exactly what had been misunderstood.
 
-O `iSceneNo` da estrutura de cena do BLEDIM (offset 4). Eu tinha posto `0xFF`,
-confundindo com o campo de cena do comando `0x88` — que aí sim usa 255. Os quatro
-buffers que o app constrói (`FlushEmptyBuf`, `FlushStaticBuf`, `FlushChaseColor`,
-`FlushChaseAuto`) zeram esse offset. Corrigido, com teste de regressão em
-`frames.test.ts`.
+**1. `iSceneNo` in BLEDIM's scene structure (offset 4).** It was set to `0xFF`,
+confused with the `0x88` command's scene field, which does use 255. All four buffers
+the app builds (`FlushEmptyBuf`, `FlushStaticBuf`, `FlushChaseColor`, `FlushChaseAuto`)
+zero that offset.
 
-**2. Power do LEDCAR-01.** Eu o agrupei com o LEDDMX porque ambos usam o envelope
-`7B FF`. Mas o `turnOn` do app ramifica pelo **nome antes do envelope**:
+**2. LEDCAR-01's power frame.** It had been grouped with LEDDMX because both use the
+`7B FF` envelope. But the app's `turnOn` branches on the **name before the envelope**:
 
 ```
 LEDBLE / LEDCAR-00   7E FF 04 01 00 FF FF 00 EF
-LEDCAR-01            7B FF 04 01 FF FF FF FF BF   ← próprio
+LEDCAR-01            7B FF 04 01 FF FF FF FF BF   ← its own
 LEDCAR-02            7B 04 01 FF FF FF FF FF BF
 LEDDMX               7B 04 04 01 FF FF FF FF BF
 ```
 
-**3. Dim do LEDDMX-02 / LEDCAR-02.** Eu tinha inventado usar o slot branco do frame
-RGB (`7B 07 00 00 00 <w> …`). O app tem opcode dedicado: `7B 09 <v> FF FF FF FF FF BF`.
+**3. Dim on LEDDMX-02 / LEDCAR-02.** We had invented borrowing the white slot of the
+RGB frame (`7B 07 00 00 00 <w> …`). The app has a dedicated opcode:
+`7B 09 <v> FF FF FF FF FF BF`.
 
-**4. Estado de velocidade/brilho do BLEDIM era global do módulo.** Esses dois valores
-viajam no mesmo comando, então mudar um exige reenviar o outro — e eu guardava a
-memória num único objeto de módulo. Com dois controladores BLEDIM, ajustar o brilho
-de um empurraria esse brilho para o outro. Agora é por aparelho.
+**4. BLEDIM's speed/brightness state was module-global.** Those two values travel in
+the same command, so changing one means resending the other — and the memory lived in a
+single module object. With two BLEDIM controllers, setting brightness on one would push
+that brightness onto the other. It is now per device.
 
-Esse apareceu porque o teste de fixture falhou: testes anteriores tinham mutado o
-estado global, e a cena saiu com velocidade 0. O sintoma era "teste frágil"; a causa
-era um bug de verdade.
+This one surfaced because a fixture test failed: earlier tests had mutated the global
+state, so the scene came out with speed 0. The symptom read as "flaky test"; the cause
+was a real bug.
 
-**5. `iSceneNo`** — ver acima.
+**5. The sound-reactive mode on the shifted DMX layout.** We assumed symmetry with the
+other families and emitted a phone-audio variant. The app has none there — only the
+microphone mode, and with a different flag byte between LEDCAR-02 and LEDDMX-02/04.
 
-## Parte dinâmica
+## The dynamic part
 
-O payload de cena de 72 bytes do BLEDIM é copiado em loop, então o extrator estático
-só consegue fixar o cabeçalho. `bledim_scene.js` fecha essa lacuna: roda dentro do
-app, chama o `ScenePara.EnPackToDb()` **dele mesmo** e imprime o buffer resultante.
+BLEDIM's 72-byte scene payload is copied in a loop, so the static extractor can only
+pin the header. `bledim_scene.js` closes that gap: it runs inside the app, calls **its
+own** `ScenePara.EnPackToDb()` and prints the resulting buffer.
 
 ```bash
 frida -H 127.0.0.1:27042 -p <pid> -l tools/difftest/bledim_scene.js
 ```
 
-Os vetores capturados estão em `src/lib/protocol/__fixtures__/bledim_scene.json` e
-são verificados em `frames.test.ts`. Confirmaram:
+The captured vectors live in `src/lib/protocol/__fixtures__/bledim_scene.json` and are
+asserted in `frames.test.ts`. They confirmed:
 
-- offsets 0–15 do nosso frame batem byte a byte
-- `[1]=0xC0` velocidade e `[2]=0xFF` brilho são mesmo os padrões
-- `[14]` carrega o efeito, com `0xFF` como sentinela de "sem efeito"
-- a tabela de cores vem **pré-preenchida com uma paleta**, não zerada — mas com
-  `bClrQty=1` só a entrada 0 é lida, então o resto é inerte
+- offsets 0–15 of our frame match byte for byte
+- `[1]=0xC0` speed and `[2]=0xFF` brightness really are the defaults
+- `[14]` carries the effect, with `0xFF` as the "no effect" sentinel
+- the colour table ships **pre-filled with a palette** rather than zeroed — but with
+  `bClrQty=1` only entry 0 is read, so the rest is inert
 
-## Os 289 literais que não emitimos
+## The 289 literals we do not emit
 
-Não são lacunas — são, quase todos, fora do escopo deste app por decisão:
+They are not gaps. Almost all are out of scope by choice:
 
-| categoria | exemplos |
+| category | examples |
 |---|---|
-| agendamento | `sendTime`, `endTime`, `closeTime`, `timeSun`, `setSmartTimer*` |
-| configuração de hardware | `setSPIModel`, `setConfigSPI`, contagem de pixels, direção, ordem de pinos |
-| específico de carro | `setCar02SetWelcomeMode`, `TurnMode`, `BrakeMode`, `Motor*` |
-| áudio e música | `sendAudioBuf`, `enableHwAudio`, `setSensitivity`, `setMusicMicroMode` |
-| grafite / pixel art | `setCar02Graffiti`, `setDmx0204Graffiti` (envelope `7C`) |
-| listas DIY de cor | `setDiy`, `setCustomCycle`, `setChangeColor`, `setCollectMode` |
-| grupos do LEDPHO | `setPhoAddGroup`, `setPhoDelectGroup`, `setPhoResetGroup` |
-| variantes por canal | `7B FF 04 <03\|05\|07>` — power por canal, 43 formas |
+| scheduling | `sendTime`, `endTime`, `closeTime`, `timeSun`, `setSmartTimer*` |
+| hardware configuration | `setSPIModel`, `setConfigSPI`, pixel count, direction, pin order |
+| car-specific | `setCar02SetWelcomeMode`, `TurnMode`, `BrakeMode`, `Motor*` |
+| audio streaming | `sendAudioBuf`, `enableHwAudio`, `setSensitivity`, `setMusicMicroMode` |
+| graffiti / pixel art | `setCar02Graffiti`, `setDmx0204Graffiti` (envelope `7C`) |
+| DIY colour lists | `setDiy`, `setCustomCycle`, `setChangeColor`, `setCollectMode` |
+| LEDPHO groups | `setPhoAddGroup`, `setPhoDelectGroup`, `setPhoResetGroup` |
+| per-channel variants | `7B FF 04 <03\|05\|07>` — power per channel, 43 shapes |
 
-**Uma categoria vale implementar**: a **consulta de estado**
+**One category is worth implementing**: the **state query**
 (`readControllerInfo` `0x87`, `setCheck` `72 12`, `setSmartCheck` `7D 01 05`,
-`setPasswordFeedback` `2A 05`). Hoje a UI presume o estado; com isso ela leria o
-aparelho de verdade — ligado/desligado, cor atual, cena, contagem de canais.
+`setPasswordFeedback` `2A 05`). Today the UI assumes the state; with these it could
+read the device — power, current colour, scene, channel count.
 
-## Limite
+## The limit
 
-Isto valida **transcrição**, não comportamento. Prova que emitimos os bytes que o app
-emite; não prova que o aparelho aceita, nem que a sequência ou o timing estão certos.
-Isso só hardware responde.
+This validates **transcription**, not behaviour. It proves we emit the bytes the app
+emits; it does not prove the device accepts them, nor that the sequence and timing are
+right. Only hardware answers that.

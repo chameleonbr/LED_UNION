@@ -19,9 +19,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'LED Onion',
-        short_name: 'LED Onion',
-        description: 'Controle centralizado de fitas e controladores LED Bluetooth',
+        name: 'LED Union',
+        short_name: 'LED Union',
+        description: 'One app for every Bluetooth LED controller you own',
         theme_color: '#0b0d12',
         background_color: '#0b0d12',
         display: 'standalone',

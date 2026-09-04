@@ -25,7 +25,7 @@
 
 <header>
   <div class="row spread">
-    <strong>LED Onion</strong>
+    <strong>LED Union</strong>
     <span class="small muted">
       {selection.ids.length} selecionado(s) · {online} online
     </span>

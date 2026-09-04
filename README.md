@@ -1,40 +1,43 @@
-# LED Onion
+# LED Union
 
-Controle centralizado de fitas e controladores LED Bluetooth, em um PWA.
+*[Leia em português](README.pt-BR.md)*
 
-Os apps originais (Magic Lantern, Lotus Lantern, LED+LAMP, BLEDIM) controlam um
-aparelho por vez, cada um fala só com a sua família, e nenhum recebe atualização.
-Aqui dá para selecionar **um, vários, todos ou um grupo** e aplicar cor, brilho,
-efeito ou cena de uma vez só.
+One app for every Bluetooth LED controller you own — a PWA, no install, no account.
 
-## Estado
+The original apps (Magic Lantern, Lotus Lantern, LED+LAMP, BLEDIM) each talk to one
+family, control one device at a time, and none of them are maintained. Here you pick
+**one device, several, all of them, or a named group** and apply a colour, brightness,
+effect or scene in one go.
 
-| família | serviço / característica | status |
+## Status
+
+| family | service / characteristic | status |
 |---|---|---|
-| MELK-* (Magic Lantern) | `FFF0` / `FFF3` | ✅ implementado |
-| ELK- / XSL- / CLK- (Lotus Lantern) | `FFF0` / `FFF3` | ✅ implementado |
-| LEDBLE / LEDSTAGE / LEDLIGHT | `FFE0` / `FFE1` | ✅ **validado em hardware** |
-| LEDDMX-00/01/03, LEDCAR-01 | `FFE0` / `FFE1` | ✅ implementado (`7B FF … BF`) |
-| LEDDMX-02/04, LEDCAR-02 | `FFE0` / `FFE1` | ✅ implementado (`7B … BF`, deslocado) |
-| LEDSMART | `FFE0` / `FFE1` | ✅ implementado (`7D … DF`) |
-| LEDSUN | `FFE0` / `FFE1` | ✅ implementado (`7A … AF`, só branco/CCT) |
-| LEDLIKE | `FFE0` / `FFE1` | ✅ implementado (`70 … 0F`, só branco/CCT) |
-| LEDPHO | `FFE0` / `FFE1` | ✅ implementado (`72 … 2F`, com endereço de grupo) |
-| BLEDIM / LanQianTech | `FFF0` / **`FFF1`** | ✅ implementado (`55 AA`, tam. variável) |
+| MELK-* (Magic Lantern) | `FFF0` / `FFF3` | ✅ implemented |
+| ELK- / XSL- / CLK- (Lotus Lantern) | `FFF0` / `FFF3` | ✅ implemented |
+| LEDBLE / LEDSTAGE / LEDLIGHT | `FFE0` / `FFE1` | ✅ **confirmed on hardware** |
+| LEDDMX-00/01/03, LEDCAR-01 | `FFE0` / `FFE1` | ✅ implemented (`7B FF … BF`) |
+| LEDDMX-02/04, LEDCAR-02 | `FFE0` / `FFE1` | ✅ implemented (`7B … BF`, shifted) |
+| LEDSMART | `FFE0` / `FFE1` | ✅ implemented (`7D … DF`) |
+| LEDSUN | `FFE0` / `FFE1` | ✅ implemented (`7A … AF`, white/CCT only) |
+| LEDLIKE | `FFE0` / `FFE1` | ✅ implemented (`70 … 0F`, white/CCT only) |
+| LEDPHO | `FFE0` / `FFE1` | ✅ implemented (`72 … 2F`, group-addressed) |
+| BLEDIM / LanQianTech | `FFF0` / **`FFF1`** | ✅ implemented (`55 AA`, variable length) |
 
-O driver `ffe0` está **confirmado em hardware**: conexão, handshake `2A` e comando de
-cor funcionam num LEDBLE-00 real. As demais famílias continuam derivadas da
-decompilação e batem byte a byte com `docs/protocol/`, mas ainda sem confirmação
-no aparelho.
+Be clear about what "implemented" means here. The `ffe0` driver is **confirmed on real
+hardware** — connecting, the `2A` handshake and the colour command all work on an
+actual LEDBLE-00. Every other family is derived from decompiling the original apps and
+matches them byte for byte (see [Differential testing](#differential-testing)), but has
+never been tried on a device.
 
-**Em aberto:** o controlador testado tem várias saídas físicas (fita, maçaneta,
-soleira) e o frame de cor padrão só atinge uma delas. Ver a seção de canais em
-`docs/protocol/ledble.md`.
+**Open question:** the controller we tested drives several physical outputs (a strip,
+a door handle, a door sill) and the default colour frame only reaches one of them. See
+the channels section in [`docs/protocol/ledble.md`](docs/protocol/ledble.md).
 
-## Rodando no celular
+## Running it on your phone
 
-Web Bluetooth exige contexto seguro. Em desenvolvimento, `localhost` conta — então
-o túnel do adb resolve sem HTTPS nem certificado:
+Web Bluetooth needs a secure context. In development `localhost` counts, so an adb
+tunnel avoids HTTPS and certificates entirely:
 
 ```bash
 npm install
@@ -42,67 +45,84 @@ npm run dev
 adb reverse tcp:5173 tcp:5173
 ```
 
-Abra `http://localhost:5173` no Chrome do Android. Em produção, sirva o `dist/`
-por HTTPS em qualquer domínio.
+Open `http://localhost:5173` in Chrome on Android. In production, serve `dist/` over
+HTTPS from any domain.
 
-iOS não suporta Web Bluetooth.
+iOS does not support Web Bluetooth.
 
-## Comandos
+## Commands
 
 ```bash
-npm run dev          # servidor de desenvolvimento
-npm run build        # gera dist/ com service worker e manifest
-npm test             # testes de frame e de fila de escrita
+npm run dev          # development server
+npm run build        # builds dist/ with a service worker and manifest
+npm test             # frame builders and the write queue
 npm run check        # svelte-check + tsc
-npm run gen:effects  # regenera src/lib/protocol/effects.ts a partir de docs/protocol/*.tsv
+npm run gen:effects  # regenerates src/lib/protocol/effects.ts from docs/protocol/*.tsv
 ```
 
-## Estrutura
+## Layout
 
 ```
-src/lib/protocol/    builders de frame puros, um módulo por família
-src/lib/queue.ts     fila serial por aparelho, com coalescing
-src/lib/ble.svelte.ts  conexões GATT e aplicação em grupo
-src/lib/ui/          telas
-docs/protocol/       specs de wire + tabelas de efeito (.tsv)
-tools/gen-effects.py gerador das tabelas
+src/lib/protocol/      pure frame builders, one module per family
+src/lib/queue.ts       serial per-device write queue, with coalescing
+src/lib/ble.svelte.ts  GATT connections and applying a command to a group
+src/lib/ui/            screens
+docs/protocol/         wire specs and effect tables (.tsv)
+docs/protocol-pt-br/   the same specs, in Portuguese
+tools/gen-effects.py   effect table generator
+tools/difftest/        checks our builders against the original apps
 ```
 
-Adicionar uma família nova = um arquivo em `src/lib/protocol/` que implementa
-`Driver`, mais uma linha no registry. Os builders são funções puras, então cada um
-ganha um teste que compara os bytes com o que está documentado.
+Adding a family is one file in `src/lib/protocol/` implementing `Driver`, plus one line
+in the registry. The builders are pure functions, so each gets a test comparing its
+bytes against the documented frame.
 
-## Fitas endereçáveis
+## Addressable strips
 
-LEDDMX e LEDCAR controlam fitas de LED endereçáveis. Na aba **Efeitos**, com um desses
-aparelhos selecionado, aparece o painel **Fita endereçável**: contagem de pixels,
-ordem dos canais, chip da fita e sentido. Sem isso configurado, os 211 efeitos
-renderizam com cor trocada ou só em parte da fita — e não dá erro nenhum, o que torna
-o sintoma difícil de diagnosticar.
+LEDDMX and LEDCAR drive individually addressable strips. In the **Effects** tab, with
+one of those selected, an **Addressable strip** panel appears: pixel count, channel
+order and direction.
 
-A configuração fica salva por aparelho.
+Without that configured the 211 effects render with the wrong colours or on only part
+of the strip — and nothing reports an error, which makes the symptom hard to diagnose.
+The configuration is saved per device.
 
-## Reagir ao som
+## Sound-reactive mode
 
-Na aba **Efeitos**, o painel **Reagir ao som** liga o microfone do próprio
-controlador e ajusta a sensibilidade. As três famílias suportam.
+Also in the **Effects** tab, the **React to sound** panel enables the controller's own
+microphone and sets its sensitivity. All three drivers support it.
 
-Alternar para o modo "música" muda o modo no aparelho, mas **transmitir o áudio do
-celular não está implementado** — exigiria capturar PCM e enviá-lo por BLE
-continuamente.
+Switching to "music" mode changes the mode on the device, but **streaming the phone's
+audio is not implemented** — that would mean capturing PCM and pushing it over BLE
+continuously.
 
-## Protocolo
+## Protocol
 
-Ver `docs/protocol/`. Resumo do que é fácil errar:
+See [`docs/protocol/`](docs/protocol/). The things that are easy to get wrong:
 
-- Brilho, velocidade, branco e CCT são **0–100**. RGB é 0–255.
-- A família `FFE0` **exige handshake** (`2A 02 …`) logo após conectar, senão ignora
-  todo comando.
-- Nenhuma família usa checksum. Todo frame tem 9 bytes.
-- Os controladores engasgam com escritas concorrentes; há uma fila por aparelho com
-  gap mínimo (50 ms para `FFE0`, 5 ms para `FFF0`).
+- On the `FFE0` and `FFF0` families, brightness, speed, white and CCT are **0–100**
+  while RGB is 0–255. On BLEDIM everything is **0–255**.
+- The `FFE0` family **requires a handshake** (`2A 02 …`) right after connecting, or the
+  controller ignores every command.
+- The `FFE0` and `FFF0` families use fixed 9-byte frames with no checksum. BLEDIM uses
+  variable-length frames **with** an additive checksum, and mandates 20-byte fragments.
+- These controllers choke on concurrent writes. There is a serial queue per device with
+  a minimum gap — 50 ms for `FFE0`, 5 ms for `FFF0`, 30 ms per fragment for BLEDIM.
 
-## Licença
+## Differential testing
 
-MIT. Interoperabilidade com protocolo próprio — o repositório contém apenas fatos de
-protocolo derivados de observação, nenhum código ou asset dos apps originais.
+The drivers were transcribed by hand from decompiled Java, and a hand-written test only
+confirms what the author understood — not what the app does. `tools/difftest/`
+mechanically extracts every frame the original apps build and diffs it against ours.
+
+**221 of 221 frames match**, across three drivers and nine wire layouts. The process
+found five real bugs that unit tests could not have. See
+[`tools/difftest/README.md`](tools/difftest/README.md).
+
+## Licence
+
+MIT.
+
+This is interoperability work with proprietary protocols. The repository contains only
+protocol facts derived from observation — no code, assets or strings from the original
+apps, and no copies of the apps themselves.

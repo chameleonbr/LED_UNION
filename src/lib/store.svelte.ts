@@ -47,12 +47,14 @@ export type Scene = {
 
 type Persisted = { devices: SavedDevice[]; groups: Group[]; scenes: Scene[] }
 
-const KEY = 'led-onion/v1'
+const KEY = 'led-union/v1'
+/** The project was renamed; carry a previous install's devices and groups over. */
+const LEGACY_KEY = 'led-onion/v1'
 const empty: Persisted = { devices: [], groups: [], scenes: [] }
 
 function load(): Persisted {
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY)
     if (!raw) return structuredClone(empty)
     return { ...structuredClone(empty), ...JSON.parse(raw) }
   } catch {

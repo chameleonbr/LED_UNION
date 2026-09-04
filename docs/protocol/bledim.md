@@ -1,50 +1,50 @@
-# BLEDIM — protocolo recuperado
+# BLEDIM — recovered protocol
 
-`BLEDIM`, package `com.forwell.bledim`. Controlador/dimmer LED Bluetooth.
+`BLEDIM`, package `com.forwell.bledim`. A Bluetooth LED dimmer / controller.
 
-## Transporte
+## Transport
 
-| item | valor |
+| item | value |
 |---|---|
 | service | `0000fff0-0000-1000-8000-00805f9b34fb` |
-| característica | **`0000fff1-0000-1000-8000-00805f9b34fb`** |
+| characteristic | **`0000fff1-0000-1000-8000-00805f9b34fb`** |
 
-Anuncia o mesmo serviço `FFF0` da família ELK/MELK, mas **escreve em `FFF1`, não em
-`FFF3`**, e o protocolo não tem nenhuma relação com o envelope `7E … EF` daquela
-família. Tratar como driver próprio.
+It advertises the same `FFF0` service as the ELK/MELK family, but **writes to `FFF1`,
+not `FFF3`**, and its protocol has nothing in common with that family's `7E … EF`
+envelope. Treat it as its own driver.
 
-Detalhes de GATT que diferem de todas as outras famílias:
+GATT details that differ from every other family here:
 
-| item | valor |
+| item | value |
 |---|---|
-| write type | **com resposta** (`setWriteType(1)`) |
-| fragmentação | **20 bytes fixos**, obrigatória |
-| intervalo | 30 ms por fragmento (15 ms com múltiplos GATTs) |
-| notify | mesma característica `FFF1` |
-| CCCD `0x2902` | o app **não** escreve; hardware real notifica sem isso |
-| MTU | nunca negociado |
+| write type | **with response** (`setWriteType(1)`) |
+| fragmentation | **fixed 20 bytes**, mandatory |
+| gap | 30 ms per fragment (15 ms with multiple GATT connections) |
+| notifications | the same `FFF1` characteristic |
+| CCCD `0x2902` | the app **never** writes it; real hardware notifies anyway |
+| MTU | never negotiated |
 
-O app dispara os fragmentos sem esperar `onCharacteristicWrite` — o intervalo é o
-único controle de fluxo que existe.
+The app fires fragments without waiting for `onCharacteristicWrite`, so the gap is the
+only flow control the protocol has.
 
-## Enquadramento
+## Framing
 
-Pacote de **comprimento variável**, não os 9 bytes fixos das outras famílias:
+A **variable-length** packet, unlike the fixed 9 bytes of the other families:
 
 ```
 55 AA <seq> <cmd> <lenHi> <lenLo> <payload…> <checksum>
- [0] [1]  [2]    [3]     [4]      [5]    [6 .. 6+len-1]   [6+len]
+ [0] [1]   [2]    [3]     [4]     [5]        [6 .. 6+len-1]   [6+len]
 ```
 
 - `55 AA` — sync (`SYNC_HB = 85`, `SYNC_LB = 170`)
-- `<seq>` — contador livre 0..255; o aparelho não valida
-- **comprimento conta só o payload**, big-endian; quadro total = `len + 7`
-- receptor: `packetSize = buf[4] * 256 + buf[5] + 7`
+- `<seq>` — free-running counter 0..255; the device does not validate it
+- **length counts the payload only**, big-endian; total frame = `len + 7`
+- receiver side: `packetSize = buf[4] * 256 + buf[5] + 7`
 
 ### Checksum
 
-Soma aditiva simples — não XOR — de **todos os bytes antes dele**, sync e cabeçalho
-inclusive:
+A plain additive sum — not XOR — of **every byte before it**, sync bytes and header
+included:
 
 ```
 sum = 0
@@ -54,69 +54,77 @@ checksum = sum & 0xFF
 
 ## Payloads
 
-| comando | len | payload |
+| command | len | payload |
 |---|---|---|
-| `0x80` power | 1 | `[0\|1]` — sem canal |
-| `0x81` cor | 4 | `[W, R, G, B]` — **branco primeiro**, 0..255 |
-| `0x88` vel/brilho | 6 | `[sceneNo, saveFlag, speed, brightness, strobe, 0]` |
-| `0x86` canais | 1 | `[1..4]` — 1=DIM 2=CCT 3=RGB 4=RGBW |
-| `0x82` efeito | 72 | estrutura de cena completa (abaixo) |
-| `0x87` consulta | 1 | `[seletor]` |
-| `0x8C` sensib. áudio | 1 | `[0..255]` |
-| `0x8D` cor salva | 6 | `[0, R, G, B, 0, 0]` |
+| `0x80` power | 1 | `[0\|1]` — no channel |
+| `0x81` colour | 4 | `[W, R, G, B]` — **white first**, 0..255 |
+| `0x88` speed/brightness | 6 | `[sceneNo, saveFlag, speed, brightness, strobe, 0]` |
+| `0x86` channels | 1 | `[1..4]` — 1=DIM 2=CCT 3=RGB 4=RGBW |
+| `0x82` effect | 72 | a whole scene structure (below) |
+| `0x87` query | 1 | `[selector]` |
+| `0x8B` mic enable | 4 | `[on, 0, 0, 0]` |
+| `0x8C` mic sensitivity | 1 | `[0..255]` |
+| `0x8D` saved colour | 6 | `[0, R, G, B, 0, 0]` |
 
-**Escalas são 0..255**, não 0..100 como nas outras famílias.
+**Ranges are 0..255**, not the 0..100 of the other families.
 
-Em `0x88`: `sceneNo = 255` significa modo livre; `saveFlag = 1` confirma, `0` é
-arrasto ao vivo. Velocidade e brilho viajam **no mesmo comando**, então mudar um
-exige lembrar o outro. Padrões: speed 192, brightness 255, strobe 0.
+In `0x88`: `sceneNo = 255` means free mode; `saveFlag = 1` commits, `0` is a live
+drag. Speed and brightness travel **in the same command**, so changing one means
+resending the other. Defaults: speed 192, brightness 255, strobe 0.
 
-### Estrutura de cena (72 bytes, comando `0x82`)
+### Scene structure — 72 bytes, command `0x82`
 
-Quadro total = 72 + 7 = **79** (`SCENE_PACKET_SIZE`).
+Total frame = 72 + 7 = **79** (`SCENE_PACKET_SIZE`).
 
-| offset | campo |
+| offset | field |
 |---|---|
 | 0 | fade (0/1) |
 | 1 | speed |
 | 2 | brightness |
-| 3 | quantidade de cores (0..14) |
-| 4 | número da cena |
+| 3 | colour count (0..14) |
+| 4 | scene slot |
 | 6 | strobe |
-| 11 | canal 4 = W |
-| 12 | largura da cor |
-| 13 | índice da cor |
-| **14** | **id do efeito**: bits 0-6 = índice 0..12, bit 7 = modo chase |
-| 16..71 | até 14 entradas de cor × 4 bytes `[W, R, G, B]` |
+| 11 | channel 4 = W |
+| 12 | colour width |
+| 13 | colour index |
+| **14** | **effect id**: bits 0-6 = index 0..12, bit 7 = chase mode |
+| 16..71 | up to 14 colour entries × 4 bytes `[W, R, G, B]` |
 
-Byte 14 igual a `255` significa "sem efeito" — cena de cor estática. A UI rotula
-`M1..M13` a partir do índice, e o app não tem nomes próprios para eles.
+Byte 14 equal to `255` means "no effect" — a static colour scene. The app's own UI
+labels these `M1..M13` from the index; it has no real names for them.
+
+Offset 4 is the **scene slot**, and the app zeroes it on every buffer it builds. Do not
+confuse it with the `0x88` command's own scene field, which does use 255.
+
+The colour table ships **pre-filled with a palette** rather than zeroed, but with
+`bClrQty = 1` only entry 0 is read, so the rest is inert.
 
 ## Handshake / binding
 
-`Encrypt.java` não faz criptografia: é uma tabela ASCII de 240 bytes e três funções
-de consulta. O fluxo:
+`Encrypt.java` does no cryptography: it is a 240-byte ASCII table plus three lookup
+functions. The flow:
 
-1. Ao conectar, o app envia `0x89` com `[segundos, milissegundos & 0xFF]` do relógio,
-   e calcula localmente duas senhas a partir desses dois nonces.
-2. O aparelho responde `0x92`. Na variante atual a verificação é
-   `getCmdPass(rcv[2]) + password2 == rcv[13]*256 + rcv[14]` — onde `rcv[2]` é o
-   número de pacote **do próprio aparelho**. É desafio/resposta real, com dois nonces.
-3. Repete a cada tick até 10 tentativas, depois desconecta.
+1. On connect the app sends `0x89` carrying `[seconds, milliseconds & 0xFF]` from its
+   clock, and locally derives two passwords from those two nonces.
+2. The device replies `0x92`. In the current variant the check is
+   `getCmdPass(rcv[2]) + password2 == rcv[13]*256 + rcv[14]`, where `rcv[2]` is the
+   **device's own** packet number. So this is a genuine challenge/response with two
+   nonces.
+3. It repeats every tick for up to 10 attempts, then disconnects.
 
-**Mas o portão é só do lado do cliente.** `mblRegisterd` é um booleano do app; nada
-demonstra que o aparelho recuse comandos não autenticados. Um cliente limpo pode
-enviar comandos direto. Mandamos o `0x89` mesmo assim: é o que faz o aparelho
-reportar o estado dele de volta.
+**But the gate is client-side only.** `mblRegisterd` is a boolean in the app; nothing
+shows the device refusing unauthenticated commands. A clean-room client can send
+commands directly. We send the `0x89` anyway: it is what makes the device report its
+state back.
 
-### Checagem de clone
+### Clone check
 
-`IsFake()` marca como falso o aparelho cujo nome seja `JDY-10` ou `Ble_Light` — nomes
-de fábrica de módulos BLE-UART genéricos. Nomes legítimos: `BLEDIM` e `LanQianTech`.
+`IsFake()` flags a device whose name is `JDY-10` or `Ble_Light` — the factory names of
+generic BLE-UART modules. Legitimate names: `BLEDIM` and `LanQianTech`.
 
-## Comandos (`Protocol.java`)
+## Commands (`Protocol.java`)
 
-| valor | constante |
+| value | constant |
 |---|---|
 | `0x80` | `CMD_ONOFF` |
 | `0x81` | `CMD_SELECT_COLOR` |
@@ -140,23 +148,20 @@ de fábrica de módulos BLE-UART genéricos. Nomes legítimos: `BLEDIM` e `LanQi
 | `0x93` | `CMD_CONTROLLER_TIME` |
 | `0x94` | `CMD_CLOCK_UNEXIST` |
 
-Outras constantes: `SCENE_PACKET_SIZE = 79`, `SCENE_PARA_SIZE = 72`,
+Other constants: `SCENE_PACKET_SIZE = 79`, `SCENE_PARA_SIZE = 72`,
 `SCENE_PACKETS_BASE = 13`, `MAX_PROTOCOL_BUFSIZE = 1024`.
 
-Existe senha e serial code (`mPassword`, `mPassword2`, `mblHaveReceivedPassword`,
-`mblRegisterd`, `Encrypt.java`) — é o "binding" que os recursos sugeriam.
+## How the code was recovered
 
-## Como o código foi recuperado
+Static analysis is impossible. All four versions tested are packed — 3.11 and 3.16
+with 360 Jiagu, 3.13 with Bangcle/SecNeo, and versionCode 41 from 2020 with Jiagu.
+None contains a plaintext DEX; the payloads measure 7.9–8.0 bits of entropy.
 
-Análise estática é impossível: as quatro versões testadas estão empacotadas
-(3.11 e 3.16 com 360 Jiagu, 3.13 com Bangcle/SecNeo, versionCode 41 de 2020 com
-Jiagu). Nenhuma tem DEX em claro; o payload tem entropia 7,9–8,0.
-
-O caminho que funcionou foi **dump de memória em Android containerizado**, tudo no
-PC, sem aparelho nem root no celular:
+What worked was a **memory dump inside a containerised Android**, entirely on the
+desktop, with no phone and no root on the phone:
 
 ```bash
-# binderfs já vem no kernel do Arch (aparece em /proc/filesystems)
+# binderfs is built into the Arch kernel already (it shows in /proc/filesystems)
 sudo mount -t binder binder /dev/binderfs
 
 sudo docker run -itd --name redroid --privileged \
@@ -164,20 +169,20 @@ sudo docker run -itd --name redroid --privileged \
   redroid/redroid:11.0.0-latest androidboot.redroid_gpu_mode=guest
 
 adb connect 127.0.0.1:5555 && adb root
-# --abi x86_64 é obrigatório: sem isso o packer extrai a .so errada e o app
-# morre com UnsatisfiedLinkError (EM_X86_64 vs EM_AARCH64)
+# --abi x86_64 is mandatory: without it the packer extracts the wrong .so and the app
+# dies with UnsatisfiedLinkError (EM_X86_64 vs EM_AARCH64)
 adb install --abi x86_64 -r BLEDIM_3.11_APKPure.apk
 adb push frida-server /data/local/tmp/ && adb shell chmod 755 /data/local/tmp/frida-server
 adb shell "nohup /data/local/tmp/frida-server >/dev/null 2>&1 &"
 adb forward tcp:27042 tcp:27042
 adb shell am start -n com.forwell.bledim/.Activity2
 
-# o frida lista pelo rótulo do app ("BLEDIM"), não pelo package
+# frida lists the process by app label ("BLEDIM"), not by package
 frida-dexdump -H 127.0.0.1:27042 -p <pid>
 ```
 
-Os DEX despejados saem com checksum e assinatura inválidos e o jadx os rejeita com
-`No classes for decompile!`. Reparar antes:
+The dumped DEX files come out with an invalid checksum and signature, and jadx rejects
+them with `No classes for decompile!`. Repair them first:
 
 ```python
 struct.pack_into('<I', d, 32, len(d))            # file_size
@@ -185,19 +190,19 @@ d[12:32] = hashlib.sha1(bytes(d[32:])).digest()  # signature
 struct.pack_into('<I', d, 8, zlib.adler32(bytes(d[12:])) & 0xffffffff)
 ```
 
-Resultado: 20 DEX, 553 classes Java, incluindo `Protocol.java`, `BlueToothLe.java`,
-`BluetoothLeService.java` e `Encrypt.java`.
+Result: 20 DEX files, 553 Java classes, including `Protocol.java`, `BlueToothLe.java`,
+`BluetoothLeService.java` and `Encrypt.java`.
 
-O `jiagu_unpacker` (SafaSafari) **não** serve para nenhuma destas versões: lê o
-comprimento do shell nos últimos 4 bytes em big-endian e obtém lixo, e suas chaves
-AES (`bajk3b4j3bvuoa3h` / `mers46ha35ga23hn`) não produzem DEX em nenhum offset.
+`jiagu_unpacker` (SafaSafari) does **not** work on any of these versions: it reads the
+shell length from the last 4 bytes as big-endian and gets garbage, and its AES keys
+(`bajk3b4j3bvuoa3h` / `mers46ha35ga23hn`) produce no DEX at any offset.
 
-## O que a UI do app original mostra
+## What the original app's UI shows
 
-- Roda de cor RGB com 7 presets (R G B Y M C W).
-- **13 efeitos embutidos + 2 slots DIY.**
-- Sliders de brilho e de velocidade.
-- Microfone e Music Player.
-- Configurações: `1CH-DIMMING` / `2CH-CT` / `3CH-RGB` / `4CH-RGBW`.
-- LED endereçável (chase) com contagem de pixels.
-- Agrupamento próprio ("Group needs 2 or more devices").
+- An RGB colour wheel with 7 presets (R G B Y M C W).
+- **13 built-in effects plus 2 DIY slots.**
+- Brightness and speed sliders.
+- Microphone and music player.
+- Settings: `1CH-DIMMING` / `2CH-CT` / `3CH-RGB` / `4CH-RGBW`.
+- Addressable (chase) LEDs with a pixel count.
+- Its own grouping ("Group needs 2 or more devices").
