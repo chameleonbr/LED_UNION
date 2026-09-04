@@ -34,6 +34,16 @@ never been tried on a device.
 a door handle, a door sill) and the default colour frame only reaches one of them. See
 the channels section in [`docs/protocol/ledble.md`](docs/protocol/ledble.md).
 
+## Deployment
+
+Pushing to `main` builds and publishes to **https://led.avila.dev.br** via GitHub
+Actions and GitHub Pages. The workflow runs the tests and the type check first — a red
+build never reaches the domain.
+
+The built `dist/` is deliberately **not** committed: it would conflict on every build
+(asset hashes change), and a stale artifact silently diverging from the source is worse
+than no artifact.
+
 ## Running it on your phone
 
 Web Bluetooth needs a secure context. In development `localhost` counts, so an adb

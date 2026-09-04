@@ -35,6 +35,16 @@ mas nunca foram testadas num aparelho.
 soleira) e o frame de cor padrão só atinge uma delas. Ver a seção de canais em
 [`docs/protocol-pt-br/ledble.md`](docs/protocol-pt-br/ledble.md).
 
+## Deploy
+
+Push na `main` compila e publica em **https://led.avila.dev.br** via GitHub Actions e
+GitHub Pages. O workflow roda os testes e a checagem de tipos antes — build vermelho
+não chega ao domínio.
+
+O `dist/` compilado **não** é commitado de propósito: daria conflito em todo build (os
+hashes dos assets mudam), e um artefato desatualizado divergindo do fonte em silêncio é
+pior que artefato nenhum.
+
 ## Rodando no celular
 
 Web Bluetooth exige contexto seguro. Em desenvolvimento `localhost` conta, então um
