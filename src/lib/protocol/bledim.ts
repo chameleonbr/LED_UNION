@@ -98,7 +98,9 @@ function sceneFrame(effectId: number, r = 255, g = 255, b = 255): Uint8Array {
   p[1] = state.speed
   p[2] = state.brightness
   p[3] = 1 // one colour entry
-  p[4] = FREE_SCENE
+  // Offset 4 is the scene slot, and the app zeroes it on every buffer it builds.
+  // Not to be confused with the 0x88 command's own scene field, which uses 255.
+  p[4] = 0
   p[6] = state.strobe
   // Low 7 bits are the effect index; bit 7 turns the chase/dynamic mode on.
   p[14] = (clamp(effectId, 0, 0x7f) | 0x80) & 0xff

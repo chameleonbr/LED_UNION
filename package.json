@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "test": "node --test 'src/**/*.test.ts'",
-    "gen:effects": "python3 tools/gen-effects.py"
+    "gen:effects": "python3 tools/gen-effects.py",
+    "difftest": "python3 tools/difftest/extract_java_frames.py $DIFFTEST_TARGETS > /tmp/java_frames.json && node tools/difftest/emit_ts_frames.ts > /tmp/ts_frames.json && python3 tools/difftest/compare.py /tmp/java_frames.json /tmp/ts_frames.json"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.0",

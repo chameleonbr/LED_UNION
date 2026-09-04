@@ -395,3 +395,15 @@ test('effect tables follow the family', () => {
   assert.equal(ffe0.effects('LEDSMART-1').length, 16)
   assert.equal(ffe0.effects('LEDSUN-1').length, 16)
 })
+
+test('bledim scene struct matches the buffers the app itself builds', async () => {
+  const { bledim } = await import('./bledim.ts')
+  const p = [...bledim.effect({ id: 0, name: 'M1' }, 'BLEDIM')].slice(6, -1)
+  assert.equal(p.length, 72)
+  assert.equal(p[0], 0, 'fade off')
+  // The app zeroes the scene slot on every buffer it builds. The 0x88 command has a
+  // separate scene field that does use 255 — conflating the two was a real bug.
+  assert.equal(p[4], 0, 'iSceneNo is 0 here, not the 0x88 free-scene sentinel')
+  assert.equal(p[14] & 0x80, 0x80, 'chase bit set')
+  assert.equal(p[14] & 0x7f, 0, 'effect index in the low 7 bits')
+})
