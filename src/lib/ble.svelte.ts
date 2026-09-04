@@ -1,5 +1,5 @@
 import { WriteQueue } from './queue.ts'
-import { allServices, driverFor, type Driver } from './protocol/index.ts'
+import { allServices, driverFor, drivers, type Driver } from './protocol/index.ts'
 import { rememberDevice, store } from './store.svelte.ts'
 
 export type ConnState = 'offline' | 'connecting' | 'online' | 'error'
@@ -31,7 +31,8 @@ export const supported = () =>
 
 function track(device: BluetoothDevice, driver: Driver) {
   const name = device.name ?? '(sem nome)'
-  conns[device.id] = { id: device.id, name, driver, state: 'offline' }
+  conns[device.id] ??= { id: device.id, name, driver, state: 'offline' }
+  Object.assign(conns[device.id], { name })
   if (!live.has(device.id)) {
     live.set(device.id, { device, queue: new WriteQueue(driver.minGapMs) })
   }
@@ -74,11 +75,33 @@ export async function addDevice(): Promise<Conn | undefined> {
     filters: allServices.map((s) => ({ services: [s] })),
     optionalServices: allServices,
   })
-  const driver = driverFor(device.name ?? '')
-  if (!driver) throw new Error(`Aparelho "${device.name}" não bate com nenhum driver`)
-  track(device, driver)
+  // The chooser already filtered on our service uuids, so anything that comes back
+  // speaks one of them. The name is only a hint for which; connect() confirms.
+  track(device, driverFor(device.name ?? '') ?? drivers[0])
   await connect(device.id)
   return conns[device.id]
+}
+
+/**
+ * Device names are not reliable (BLEDIM, LED_BLE_xx and MELK-xx all turn up), so the
+ * name is only a first guess. Whichever driver's service and characteristic actually
+ * exist on the device is the one we use.
+ */
+async function resolveDriver(
+  server: BluetoothRemoteGATTServer,
+  guess: Driver,
+): Promise<{ driver: Driver; char: BluetoothRemoteGATTCharacteristic }> {
+  const order = [guess, ...drivers.filter((d) => d !== guess)]
+  for (const driver of order) {
+    try {
+      const service = await server.getPrimaryService(driver.service)
+      const char = await service.getCharacteristic(driver.writeChar)
+      return { driver, char }
+    } catch {
+      // Wrong family — try the next one.
+    }
+  }
+  throw new Error('Nenhum serviço conhecido encontrado neste aparelho')
 }
 
 export async function connect(id: string): Promise<void> {
@@ -91,8 +114,13 @@ export async function connect(id: string): Promise<void> {
   c.error = undefined
   try {
     const server = await l.device.gatt!.connect()
-    const service = await server.getPrimaryService(c.driver.service)
-    l.char = await service.getCharacteristic(c.driver.writeChar)
+    const resolved = await resolveDriver(server, c.driver)
+    if (resolved.driver !== c.driver) {
+      c.driver = resolved.driver
+      // Pacing is per-family, so the queue has to follow the driver.
+      l.queue = new WriteQueue(resolved.driver.minGapMs)
+    }
+    l.char = resolved.char
     c.state = 'online'
     // Some families ignore every command until they get a handshake frame.
     for (const frame of c.driver.onConnect?.(c.name) ?? []) {

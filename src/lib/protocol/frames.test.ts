@@ -96,7 +96,10 @@ test('device names route to the right driver', () => {
   assert.equal(driverFor('MELK-OB-1234')?.id, 'fff0')
   assert.equal(driverFor('ELK-BLEDOM')?.id, 'fff0')
   assert.equal(driverFor('XSL-Light')?.id, 'fff0')
-  assert.equal(driverFor('LEDBLE-4E32')?.id, 'ffe0')
+  assert.equal(driverFor('LEDBLE-00-9B07')?.id, 'ffe0')
+  assert.equal(driverFor('LED_BLE_00203032')?.id, 'ffe0')
+  // BLEDIM advertises FFF0, so it gets the fff0 guess; connect() still probes.
+  assert.equal(driverFor('BLEDIM')?.id, 'fff0')
   assert.equal(driverFor('Some Random Speaker'), undefined)
 })
 

@@ -42,7 +42,8 @@ export const ffe0: Driver = {
   writeChar: WRITE_CHAR,
   minGapMs: 50,
 
-  matches: (name) => /^(LEDBLE|LEDSTAGE|LEDLIGHT)/i.test(name),
+  // Names in the wild use both LEDBLE-xx and LED_BLE_xx.
+  matches: (name) => /^(LED[_ ]?BLE|LEDSTAGE|LEDLIGHT)/i.test(name),
 
   caps: (): Caps => ({
     rgb: true,
