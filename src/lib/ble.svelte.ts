@@ -1,4 +1,5 @@
 import { WriteQueue } from './queue.ts'
+export { parseHex, toHex } from './hex.ts'
 import { allServices, driverFor, drivers, type Driver } from './protocol/index.ts'
 import { rememberDevice, store } from './store.svelte.ts'
 
@@ -181,3 +182,84 @@ export async function apply(
     }),
   )
 }
+
+export type CharInfo = { uuid: string; props: string[] }
+export type ServiceInfo = { uuid: string; chars: CharInfo[] }
+
+function propsOf(ch: BluetoothRemoteGATTCharacteristic): string[] {
+  const p = ch.properties
+  const names: Array<[boolean, string]> = [
+    [p.read, 'READ'],
+    [p.write, 'WRITE'],
+    [p.writeWithoutResponse, 'WRITE_NR'],
+    [p.notify, 'NOTIFY'],
+    [p.indicate, 'INDICATE'],
+  ]
+  return names.filter(([on]) => on).map(([, n]) => n)
+}
+
+/**
+ * Enumerate what the device actually exposes. Web Bluetooth only reveals services
+ * declared up front, so an unlisted one is probed by uuid; characteristics inside a
+ * service we can reach need no such declaration.
+ */
+export async function inspect(id: string): Promise<ServiceInfo[]> {
+  const l = live.get(id)
+  if (!l) throw new Error('Aparelho não pareado nesta sessão')
+  const server = await l.device.gatt!.connect()
+
+  let services: BluetoothRemoteGATTService[] = []
+  try {
+    services = await server.getPrimaryServices()
+  } catch {
+    for (const uuid of allServices) {
+      try {
+        services.push(await server.getPrimaryService(uuid))
+      } catch {
+        // Not on this device.
+      }
+    }
+  }
+
+  const out: ServiceInfo[] = []
+  for (const service of services) {
+    let chars: BluetoothRemoteGATTCharacteristic[] = []
+    try {
+      chars = await service.getCharacteristics()
+    } catch {
+      // Service present but characteristics not readable.
+    }
+    out.push({
+      uuid: service.uuid,
+      chars: chars.map((ch) => ({ uuid: ch.uuid, props: propsOf(ch) })),
+    })
+  }
+  return out
+}
+
+/** Send an arbitrary frame to one device — the bench for an unknown protocol. */
+export async function sendRaw(
+  id: string,
+  frame: Uint8Array,
+  charUuid?: string,
+): Promise<void> {
+  const l = live.get(id)
+  const c = conns[id]
+  if (!l || !c) throw new Error('Aparelho não pareado nesta sessão')
+  if (c.state !== 'online') await connect(id)
+
+  if (charUuid && charUuid !== l.char?.uuid) {
+    const server = await l.device.gatt!.connect()
+    for (const service of await server.getPrimaryServices()) {
+      for (const ch of await service.getCharacteristics()) {
+        if (ch.uuid === charUuid) {
+          await l.queue.push(() => writeRaw({ ...l, char: ch }, frame))
+          return
+        }
+      }
+    }
+    throw new Error(`Característica ${charUuid} não encontrada`)
+  }
+  await l.queue.push(() => writeRaw(l, frame))
+}
+

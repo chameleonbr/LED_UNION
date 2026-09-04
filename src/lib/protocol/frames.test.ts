@@ -120,3 +120,13 @@ test('effect tables are populated and in range', () => {
   assert.equal(fff0.effects('MELK-OC').length, 241)
   assert.equal(fff0.effects('ELK-BLEDOM').length, 29)
 })
+
+test('parseHex accepts the formats a human actually types', async () => {
+  const { parseHex } = await import('../hex.ts')
+  const want = [0x7e, 0x04, 0x04, 0x01]
+  for (const input of ['7E040401', '7e 04 04 01', '0x7E 0x04 0x04 0x01', '7E:04:04:01']) {
+    assert.deepEqual([...parseHex(input)], want, `failed on ${input}`)
+  }
+  assert.throws(() => parseHex('7E0'), /ímpar|inválido/i)
+  assert.throws(() => parseHex(''), /inválido/i)
+})

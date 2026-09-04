@@ -5,8 +5,9 @@
   import Color from './lib/ui/Color.svelte'
   import Effects from './lib/ui/Effects.svelte'
   import Scenes from './lib/ui/Scenes.svelte'
+  import Debug from './lib/ui/Debug.svelte'
 
-  type Tab = 'devices' | 'color' | 'effects' | 'scenes'
+  type Tab = 'devices' | 'color' | 'effects' | 'scenes' | 'debug'
   let tab = $state<Tab>('devices')
 
   const tabs: Array<{ id: Tab; label: string }> = [
@@ -14,6 +15,7 @@
     { id: 'color', label: 'Cor' },
     { id: 'effects', label: 'Efeitos' },
     { id: 'scenes', label: 'Cenas' },
+    { id: 'debug', label: 'Debug' },
   ]
 
   const online = $derived(Object.values(conns).filter((c) => c.state === 'online').length)
@@ -45,8 +47,10 @@
     <Color />
   {:else if tab === 'effects'}
     <Effects />
-  {:else}
+  {:else if tab === 'scenes'}
     <Scenes />
+  {:else}
+    <Debug />
   {/if}
 </main>
 
@@ -81,7 +85,7 @@
     right: 0;
     bottom: 0;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 4px;
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
     background: var(--surface);

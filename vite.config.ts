@@ -3,6 +3,16 @@ import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // Reachable over the tailnet for on-device testing; ts.net terminates TLS, which
+  // is what makes Web Bluetooth available at all.
+  server: {
+    host: true,
+    allowedHosts: ['.ts.net'],
+  },
+  preview: {
+    host: true,
+    allowedHosts: ['.ts.net'],
+  },
   plugins: [
     svelte(),
     VitePWA({
