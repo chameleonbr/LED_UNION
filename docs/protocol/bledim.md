@@ -1,132 +1,117 @@
-# BLEDIM — protocolo DESCONHECIDO
+# BLEDIM — protocolo recuperado
 
-`BLEDIM 3.16`, package `com.forwell.bledim`.
+`BLEDIM`, package `com.forwell.bledim`. Controlador/dimmer LED Bluetooth.
 
-## Status
+## Transporte
 
-**Nada do protocolo é conhecido.** Nem o UUID do serviço, nem o da característica,
-nem o formato dos frames.
+| item | valor |
+|---|---|
+| service | `0000fff0-0000-1000-8000-00805f9b34fb` |
+| característica | **`0000fff1-0000-1000-8000-00805f9b34fb`** |
 
-### Versões testadas — todas empacotadas
+Anuncia o mesmo serviço `FFF0` da família ELK/MELK, mas **escreve em `FFF1`, não em
+`FFF3`**, e o protocolo não tem nenhuma relação com o envelope `7E … EF` daquela
+família. Tratar como driver próprio.
 
-| versão | packer | payload | DEX em claro |
-|---|---|---|---|
-| vc 41 (2020) | 360 Jiagu | dentro do próprio `classes.dex`, após `map_end` | não |
-| 3.11 | 360 Jiagu | `assets/libjiagu*.so` | não |
-| 3.13 | Bangcle/SecNeo (`com.wrapper.proxyapplication`) | `assets/0OO00l111l1l`, 928 KB, entropia 7,95 | não |
-| 3.16 | 360 Jiagu | `assets/libjiagu*.so`, entropia 7,88 | não |
+## Enquadramento
 
-O desenvolvedor trocou de packer entre versões, então versões anteriores à adoção
-de proteção provavelmente são analisáveis. O app existe desde 2016.
-
-**Como reconhecer uma versão limpa sem ferramenta:** `unzip -l` não mostra
-`libjiagu*.so` nem `libshell-super.*`, e o `classes.dex` tem centenas de KB em vez de
-dezenas.
-
-### Anatomia da versão de 2020 (melhor alvo estático, ainda assim fechado)
-
-O `classes.dex` tem cabeçalho válido, mas suas seções acabam bem antes do fim:
+Pacote de **comprimento variável**, não os 9 bytes fixos das outras famílias:
 
 ```
-file_size   773080        map_off    30580 (16 entradas)
-data_off    11856         map_end    30776
-data_size   18920         payload    742304 bytes até o EOF
+55 AA <?> <cmd> <lenHi> <lenLo> <payload…> <tail>
 ```
 
-O payload tem **entropia 8,00** — o máximo teórico, cifra forte sem estrutura
-detectável. jadx recupera 8 classes, todas stubs da Qihoo (`com/stub/StubApp`,
-`com/qihoo/util/*`). Nenhuma linha de código do app.
+- `55 AA` — sync (`SYNC_HB = 85`, `SYNC_LB = 170`)
+- cabeçalho de **6 bytes** (`PROTOCOL_HEADER_SIZE`), cabeçalho + cauda = **7**
+- comprimento em **big-endian**: o receptor calcula
+  `packetSize = buf[4] * 256 + buf[5] + 7`
+- há um byte de cauda (checksum) — ao contrário de todas as outras famílias, que
+  não têm checksum nenhum
 
-O `jiagu_unpacker` (SafaSafari) não abre nenhuma das versões: ele lê o comprimento
-do shell nos últimos 4 bytes em big-endian, e aqui isso dá lixo (`0x10000000` na de
-2020, `0xC7862004` na 3.16). As chaves que ele carrega (`bajk3b4j3bvuoa3h` /
-`mers46ha35ga23hn`, AES-CBC) também não produzem DEX em nenhum offset testado —
-a saída permanece em entropia 7,95.
+## Comandos (`Protocol.java`)
 
-**Conclusão:** escrever um decifrador de Jiagu para esta variante é projeto de
-pesquisa, não tarefa de uma sessão. Os caminhos viáveis são dinâmicos (dump de
-memória) ou observacionais (captura HCI, sondagem GATT ao vivo).
+| valor | constante |
+|---|---|
+| `0x80` | `CMD_ONOFF` |
+| `0x81` | `CMD_SELECT_COLOR` |
+| `0x82` | `CMD_SEND_IMMEDIATE_SCENE` |
+| `0x83` | `CMD_SEND_SCHEDULE` / `CMD_CONTROLLER_SCHEDULE_INFO` |
+| `0x84` | `CMD_SCHEDULE_ONOFF` |
+| `0x85` | `CMD_SYNC_SYMTEM_TIME` |
+| `0x86` | `CMD_SWITCH_CHANNELS` |
+| `0x87` | `CMD_READ_CONTROLLER_INFO` |
+| `0x88` | `CMD_UPDATE_SPEED_BRIGHTNESS` |
+| `0x89` | `CMD_SEND_SERIAL_CODE` |
+| `0x8A` | `CMD_SEND_AUDIO_BUF` |
+| `0x8B` | `CMD_ENABLE_HW_AUDIO` |
+| `0x8C` | `CMD_SET_AUDIO_SENSE` |
+| `0x8D` | `CMD_SELECT_COLOR_SAVE` |
+| `0x8E` | `CMD_UPDATE_CHASE_PARA` |
+| `0x8F` | `CMD_SAVE_CHASE_RGB_SEC` |
+| `0x90` | `CMD_CONTROLLER_ACK` |
+| `0x91` | `CMD_CONTROLLER_SCENE_INFO` |
+| `0x92` | `CMD_CONTROLLER_PASSWORD` |
+| `0x93` | `CMD_CONTROLLER_TIME` |
+| `0x94` | `CMD_CLOCK_UNEXIST` |
 
-O APK está empacotado com **360 Jiagu**. O `classes.dex` contém apenas o stub
-(`com.stub.StubApp`, `com.tianyu.util.DtcLoader`) — jadx produz 5 arquivos, zero
-lógica. O código real está cifrado em `assets/libjiagu*.so` e só é decifrado em
-memória, em runtime.
+Outras constantes: `SCENE_PACKET_SIZE = 79`, `SCENE_PARA_SIZE = 72`,
+`SCENE_PACKETS_BASE = 13`, `MAX_PROTOCOL_BUFSIZE = 1024`.
 
-Varredura do APK inteiro (todos os arquivos, não só o dex) por padrão de UUID:
-**zero ocorrências**. Nenhuma pista sobrou fora do dex cifrado.
+Existe senha e serial code (`mPassword`, `mPassword2`, `mblHaveReceivedPassword`,
+`mblRegisterd`, `Encrypt.java`) — é o "binding" que os recursos sugeriam.
 
-## O que os recursos revelam
+## Como o código foi recuperado
 
-Os recursos não são empacotados, então isso é sólido:
+Análise estática é impossível: as quatro versões testadas estão empacotadas
+(3.11 e 3.16 com 360 Jiagu, 3.13 com Bangcle/SecNeo, versionCode 41 de 2020 com
+Jiagu). Nenhuma tem DEX em claro; o payload tem entropia 7,9–8,0.
 
-- `bluetooth_dimmer` = **"Bluetooth Dimmer"** — é um controlador de dimmer, não fita RGB.
-- `szChannel` = `1CH-DIMMING`, `2CH-CT`, `3CH-RGB`, `4CH-RGBW` — o aparelho reporta em
-  qual modo de canal opera, e o app se adapta.
-- `can_not_switch_channel` = "The dimming mode can not be changed for this model" —
-  existem variantes de hardware com modo de canal fixo.
-- `activity_chase.xml`, `activity_chasepara.xml`, `pixel_amount`, `pixels` — suporta
-  **LED endereçável** (chase / pixel), com contagem de pixels configurável.
-- `group_more_than_one_device` = "Group needs 2 or more devices" — o app já tem
-  agrupamento próprio.
-- `clock_unexist` = "Schedule is not supported by current model" — agendamento, opcional
-  por modelo.
-- `now_binding` / `fake` = "Warnning, the device is a fake!" — existe um passo de
-  **binding** e alguma checagem de autenticidade. Isso sugere handshake obrigatório.
-- Activities: `BlueTooth`, `Devices`, `Color`, `Music`, `Sound`, `Chase`, `ChasePara`,
-  `AudioSense`, `BleOnline`, `Schedule`.
+O caminho que funcionou foi **dump de memória em Android containerizado**, tudo no
+PC, sem aparelho nem root no celular:
 
-O "binding" + anti-clone é o ponto de risco: pode haver um desafio/resposta na conexão,
-não só um frame de senha fixo.
+```bash
+# binderfs já vem no kernel do Arch (aparece em /proc/filesystems)
+sudo mount -t binder binder /dev/binderfs
 
-## Evidência da UI do app original (capturas)
+sudo docker run -itd --name redroid --privileged \
+  -v "$PWD/redroid-data:/data" -p 5555:5555 \
+  redroid/redroid:11.0.0-latest androidboot.redroid_gpu_mode=guest
 
-O app rodando mostra a superfície de recursos, o que restringe muito o protocolo:
+adb connect 127.0.0.1:5555 && adb root
+# --abi x86_64 é obrigatório: sem isso o packer extrai a .so errada e o app
+# morre com UnsatisfiedLinkError (EM_X86_64 vs EM_AARCH64)
+adb install --abi x86_64 -r BLEDIM_3.11_APKPure.apk
+adb push frida-server /data/local/tmp/ && adb shell chmod 755 /data/local/tmp/frida-server
+adb shell "nohup /data/local/tmp/frida-server >/dev/null 2>&1 &"
+adb forward tcp:27042 tcp:27042
+adb shell am start -n com.forwell.bledim/.Activity2
 
-- **Roda de cor RGB** com leitura `255,255,255` e 7 presets (R G B Y M C W).
-- **13 efeitos embutidos + 2 slots DIY.** Miniaturas: 1–7 são as sete cores estáticas
-  (R G B Y M C W); 8 = barras de sete cores; 9 = R/preto/G/preto/B; 10 = gradiente
-  arco-íris; 11 = multi com preto; 12 = vermelho esmaecendo; 13 = R/preto/B/preto.
-- **Sliders de brilho e de velocidade** na tela de efeitos.
-- **Microfone e Music Player.**
-- **Configurações: `3CH-RGB` / `4CH-RGBW`** (rádio, 3CH selecionado) — casa com o
-  `szChannel` dos recursos.
+# o frida lista pelo rótulo do app ("BLEDIM"), não pelo package
+frida-dexdump -H 127.0.0.1:27042 -p <pid>
+```
 
-### Hipótese forte sobre os efeitos
+Os DEX despejados saem com checksum e assinatura inválidos e o jadx os rejeita com
+`No classes for decompile!`. Reparar antes:
 
-O conjunto canônico ELK/BLEDOM `0x80..0x8C` tem **exatamente 13 valores**, e o caráter
-de cada um bate com as miniaturas:
+```python
+struct.pack_into('<I', d, 32, len(d))            # file_size
+d[12:32] = hashlib.sha1(bytes(d[32:])).digest()  # signature
+struct.pack_into('<I', d, 8, zlib.adler32(bytes(d[12:])) & 0xffffffff)
+```
 
-| BLEDIM | efeito | candidato ELK |
-|---|---|---|
-| 1–7 | sete cores estáticas | `0x80`–`0x86` |
-| 8 | barras de sete cores | `0x88` seven color jumping |
-| 9 | três cores com preto | `0x87` three color jumping |
-| 10 | gradiente arco-íris | `0x8A` seven color cross fade |
-| 11 | multi com preto | `0x89` three color cross fade |
-| 12 | vermelho esmaecendo | `0x8B` red gradual |
-| 13 | duas cores com preto | `0x8C` green gradual (ou variante) |
+Resultado: 20 DEX, 553 classes Java, incluindo `Protocol.java`, `BlueToothLe.java`,
+`BluetoothLeService.java` e `Encrypt.java`.
 
-A ordem das estáticas no app difere da lista do Lotus (que é R, Blue, Green, …), então o
-mapeamento exato ainda precisa de confirmação — mas a contagem e o caráter apontam para
-um aparelho de classe ELK-BLEDOM, o que é coerente com ele anunciar `FFF0`.
+O `jiagu_unpacker` (SafaSafari) **não** serve para nenhuma destas versões: lê o
+comprimento do shell nos últimos 4 bytes em big-endian e obtém lixo, e suas chaves
+AES (`bajk3b4j3bvuoa3h` / `mers46ha35ga23hn`) não produzem DEX em nenhum offset.
 
-**Ainda não confirmado:** a característica de escrita e o formato exato do frame.
+## O que a UI do app original mostra
 
-## Como descobrir
-
-Em ordem de custo:
-
-1. **Enumerar GATT ao vivo** — nRF Connect (ou similar) no celular, conectar num
-   aparelho e listar serviços e características. Dá os UUIDs em ~2 minutos. Não dá
-   os frames.
-2. **Captura HCI snoop** — ativar "Bluetooth HCI snoop log" nas opções do
-   desenvolvedor, usar o BLEDIM numa sequência roteirizada, extrair com
-   `adb bugreport` (não precisa root). Dá UUIDs **e** frames **e** o handshake de
-   binding. É o caminho que resolve.
-3. **`frida-dexdump`** em aparelho ou emulador rooteado — o Jiagu decifra o dex em
-   memória no `DexClassLoader`; o dump entrega o código-fonte inteiro. Mais setup,
-   mas é o único jeito de recuperar a tabela de efeitos completa se ela não estiver
-   nos recursos.
-
-O passo 1 é barato e vale fazer antes de qualquer coisa: se o serviço for `FFF0` ou
-`FFE0`, um dos drivers existentes pode já falar com o aparelho.
+- Roda de cor RGB com 7 presets (R G B Y M C W).
+- **13 efeitos embutidos + 2 slots DIY.**
+- Sliders de brilho e de velocidade.
+- Microfone e Music Player.
+- Configurações: `1CH-DIMMING` / `2CH-CT` / `3CH-RGB` / `4CH-RGBW`.
+- LED endereçável (chase) com contagem de pixels.
+- Agrupamento próprio ("Group needs 2 or more devices").

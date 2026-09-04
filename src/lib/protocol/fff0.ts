@@ -25,9 +25,9 @@ export const fff0: Driver = {
   writeChar: WRITE_CHAR,
   minGapMs: 5,
 
-  // BLEDIM advertises this service too, but it is a dimmer/pixel controller from
-  // another product line — the frames below are unverified on it. See docs/protocol/bledim.md.
-  matches: (name) => /^(MELK-|ELK[-~_]|XSL-|CLK-|BLEDIM)/i.test(name),
+  // BLEDIM advertises the same service but speaks an entirely different protocol
+  // (0x55 0xAA framing, variable length). It gets its own driver — never this one.
+  matches: (name) => /^(MELK-|ELK[-~_]|XSL-|CLK-)/i.test(name),
 
   caps(name): Caps {
     return {

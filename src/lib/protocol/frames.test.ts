@@ -98,8 +98,8 @@ test('device names route to the right driver', () => {
   assert.equal(driverFor('XSL-Light')?.id, 'fff0')
   assert.equal(driverFor('LEDBLE-00-9B07')?.id, 'ffe0')
   assert.equal(driverFor('LED_BLE_00203032')?.id, 'ffe0')
-  // BLEDIM advertises FFF0, so it gets the fff0 guess; connect() still probes.
-  assert.equal(driverFor('BLEDIM')?.id, 'fff0')
+  // BLEDIM shares the FFF0 service but not the protocol — it must not match fff0.
+  assert.equal(driverFor('BLEDIM'), undefined)
   assert.equal(driverFor('Some Random Speaker'), undefined)
 })
 
