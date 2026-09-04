@@ -20,8 +20,6 @@ test('an install from before looks and colours keeps its devices', () => {
         name: 'LEDBLE-00-9B67',
         label: 'Carro',
         driverId: 'ffe0',
-        // Channel 0 is no longer created for new devices, but an existing one must
-        // survive: it still addresses every output of that controller.
         outputs: [
           { ch: 0, label: 'Todas' },
           { ch: 1, label: 'fita' },
@@ -35,13 +33,23 @@ test('an install from before looks and colours keeps its devices', () => {
   const s = migrate(old)
   assert.equal(s.devices.length, 1)
   assert.equal(s.devices[0].label, 'Carro')
-  assert.equal(s.devices[0].outputs?.length, 3)
-  assert.deepEqual(s.devices[0].outputs?.map((o) => o.ch), [0, 1, 2])
+  // Channel 0 is dropped: it overlapped the real outputs and the global All card, and
+  // showed up as a third, duplicate light in the list.
+  assert.equal(s.devices[0].outputs?.length, 2)
+  assert.deepEqual(s.devices[0].outputs?.map((o) => o.ch), [1, 2])
+  assert.deepEqual(s.devices[0].outputs?.map((o) => o.label), ['fita', 'maçaneta'])
   assert.equal(s.devices[0].strip?.pixels, 120)
   assert.equal(s.groups.length, 1)
   // Fields that did not exist before are filled in rather than left undefined.
   assert.equal(s.colors.length, 8)
   assert.deepEqual(s.looks, {})
+})
+
+test('a device whose only output was channel 0 becomes a plain single device', () => {
+  const s = migrate({
+    devices: [{ id: 'a', name: 'LEDBLE-00', driverId: 'ffe0', outputs: [{ ch: 0, label: 'Todas' }] }],
+  })
+  assert.equal(s.devices[0].outputs, undefined)
 })
 
 test('scenes from the old single-colour shape are dropped, not misapplied', () => {

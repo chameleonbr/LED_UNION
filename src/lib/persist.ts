@@ -130,6 +130,16 @@ export function migrate(raw: unknown): Persisted {
   if (!merged.looks || typeof merged.looks !== 'object') merged.looks = {}
   if (!Array.isArray(merged.customEffects)) merged.customEffects = []
 
+  // Channel 0 addressed "every output of this controller". With per-output control it
+  // overlaps the two real outputs and the global All card, and on screen it read as a
+  // third, duplicate light. Drop it from installs that still carry it.
+  for (const d of merged.devices ?? []) {
+    if (d.outputs?.length) {
+      d.outputs = d.outputs.filter((o) => o.ch !== 0)
+      if (d.outputs.length === 0) delete d.outputs
+    }
+  }
+
   // Scenes used to hold a single colour/effect with no notion of which device it was
   // for. There is no faithful way to map that onto per-device entries, so the old ones
   // are dropped rather than silently applied to the wrong lights.

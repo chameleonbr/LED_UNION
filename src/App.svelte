@@ -19,6 +19,10 @@
 
   const online = $derived(Object.values(conns).filter((c) => c.state === 'online').length)
 
+  function select(id: Tab) {
+    tab = id
+  }
+
   onMount(() => { restore() })
 </script>
 
@@ -39,12 +43,18 @@
 </header>
 
 <main>
+  <!-- A warning, not a replacement. Hiding every tab behind it also hid the saved
+       devices and the Debug tools, which are exactly what you want when Web Bluetooth
+       is missing. Keeping it out of the tab chain also keeps `tab` the only thing that
+       chain depends on. -->
   {#if !supported()}
-    <div class="card" style="border-color: var(--warn)">
+    <div class="card" style="border-color: var(--warn); margin-bottom: 12px">
       <b>{t('common.unsupported')}</b>
       <p class="small muted" style="margin:6px 0 0">{t('common.unsupportedHint')}</p>
     </div>
-  {:else if tab === 'devices'}
+  {/if}
+
+  {#if tab === 'devices'}
     <Devices />
   {:else if tab === 'effects'}
     <Effects />
@@ -57,7 +67,7 @@
 
 <nav>
   {#each tabs as tb}
-    <button class="ghost" class:active={tab === tb.id} onclick={() => (tab = tb.id)}>
+    <button class="ghost" class:active={tab === tb.id} onclick={() => select(tb.id)}>
       {t(tb.key)}
     </button>
   {/each}

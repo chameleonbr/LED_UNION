@@ -3,7 +3,7 @@ export { parseHex, toHex } from './hex.ts'
 import { epKey, parseEp } from './endpoint.ts'
 export { epKey, parseEp }
 import { allServices, driverFor, drivers, type Driver } from './protocol/index.ts'
-import { rememberDevice, store } from './store.svelte.ts'
+import { forgetDevice, rememberDevice, store } from './store.svelte.ts'
 
 /** What to show a human. Never pass this to a driver. */
 export const displayName = (c: { name: string; label?: string }) => c.label || c.name
@@ -216,6 +216,22 @@ export async function connect(id: string): Promise<void> {
     c.error = explain(e)
     throw new Error(c.error)
   }
+}
+
+/**
+ * Forget a device everywhere.
+ *
+ * Dropping it from the store alone left it on screen, because the lists render from
+ * `conns` — which `restore()` also repopulates from the saved devices on every load.
+ * So the connection state has to go too, or a deleted device comes straight back.
+ */
+export function forget(id: string) {
+  disconnect(id)
+  delete conns[id]
+  live.delete(id)
+  connectedAt.delete(id)
+  selection.ids = selection.ids.filter((k) => parseEp(k).deviceId !== id)
+  forgetDevice(id)
 }
 
 export function disconnect(id: string) {

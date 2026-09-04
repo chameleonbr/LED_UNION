@@ -14,14 +14,16 @@
     conn,
     ch,
     label,
-    checked = $bindable(false),
+    checked,
+    onToggle,
     onEditCustom,
   }: {
     dkey: string
     conn: Conn
     ch?: number
     label: string
-    checked?: boolean
+    checked: boolean
+    onToggle: (next: boolean) => void
     onEditCustom: () => void
   } = $props()
 
@@ -154,7 +156,11 @@
 
 <div class="card col" style:border-color={checked ? 'var(--accent)' : undefined}>
   <div class="row">
-    <input type="checkbox" bind:checked />
+    <input
+      type="checkbox"
+      {checked}
+      onchange={(e) => onToggle((e.currentTarget as HTMLInputElement).checked)}
+    />
     <span class="dot {conn.state}"></span>
     <button class="ghost head grow" onclick={() => (open = !open)}>
       <span class="truncate">{label}</span>

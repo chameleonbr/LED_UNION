@@ -1,9 +1,9 @@
 <script lang="ts">
   import {
-    conns, selection, addDevice, connect, disconnect, displayName,
+    conns, selection, addDevice, connect, disconnect, displayName, forget,
   } from '../ble.svelte.ts'
   import {
-    store, forgetDevice, addGroup, removeGroup, renameDevice,
+    store, addGroup, removeGroup, renameDevice,
     setOutputs, renameOutput, defaultOutputs,
   } from '../store.svelte.ts'
   import { epKey } from '../endpoint.ts'
@@ -156,7 +156,7 @@
       {:else}
         <button class="ghost small" onclick={() => connect(c.id)}>{t('devices.connect')}</button>
       {/if}
-      <button class="ghost danger small" onclick={() => forgetDevice(c.id)}>✕</button>
+      <button class="ghost danger small" onclick={() => forget(c.id)}>✕</button>
     </div>
 
     {#if outs?.length}

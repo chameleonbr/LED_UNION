@@ -80,7 +80,8 @@
         conn={l.conn}
         ch={l.ch}
         label={l.label}
-        bind:checked={picked[l.key]}
+        checked={picked[l.key] ?? false}
+        onToggle={(v) => (picked[l.key] = v)}
         onEditCustom={() => (editing = true)}
       />
     {/each}
