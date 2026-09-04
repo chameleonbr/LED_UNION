@@ -1,0 +1,211 @@
+255	AUTO
+1	Forward Dreaming
+2	Backward Dreaming
+3	Forward 7 Colors
+4	Backward 7 Colors
+5	Forward RD/GN/BU
+6	Backward RD/GN/BU
+7	Forward YE/CN/VT
+8	Backward YE/CN/VT
+9	Forward 6 Colors RD
+10	Backward 6 Colors RD
+11	Forward 6 Colors GN
+12	Backward 6 Colors GN
+13	Forward 6 Colors BU
+14	Backward 6 Colors BU
+15	Forward 6 Colors CN
+16	Backward 6 Colors CN
+17	Forward 6 Colors YE
+18	Backward 6 Colors YE
+19	Forward 6 Colors VT
+20	Backward 6 Colors VT
+21	Forward 6 Colors WH
+22	Backward 6 Colors WH
+23	Forward Trailing 7 Colors
+24	Backward Trailing 7 Colors
+25	Forward Trailing RD
+26	Backward Trailing RD
+27	Forward Trailing GN
+28	Backward Trailing GN
+29	Forward Trailing BU
+30	Backward Trailing BU
+31	Forward Trailing YE
+32	Backward Trailing YE
+33	Forward Trailing CN
+34	Backward Trailing CN
+35	Forward Trailing VT
+36	Backward Trailing VT
+37	Forward Trailing WH
+38	Backward Trailing WH
+39	Forward Streaming 7 Colors
+40	Backward Streaming 7 Colors
+41	Forward Streaming RD/GN/BU
+42	Backward Streaming RD/GN/BU
+43	Forward Streaming YE/CN/VT
+44	Backward Streaming YE/CN/VT
+45	Forward Streaming RD/GN
+46	Backward Streaming RD/GN
+47	Forward Streaming GN/BU
+48	Backward Streaming GN/BU
+49	Forward Streaming YE/BU
+50	Backward Streaming YE/BU
+51	Forward Streaming YE/CN
+52	Backward Streaming YE/CN
+53	Forward Streaming CN/VT
+54	Backward Streaming CN/VT
+55	Forward Streaming BK/WH
+56	Backward Streaming BK/WH
+57	Open Curtain 7 Colors
+58	Close Curtain 7 Colors
+59	Open Curtain RD/GN/BU
+60	Close Curtain RD/GN/BU
+61	Open Curtain YE/CN/VT
+62	Close Curtain YE/CN/VT
+63	Forward Follow Spot 7 Colors
+64	Backward Follow Spot 7 Colors
+65	Forward Follow Spot RD/GN/BU
+66	Backward Follow Spot RD/GN/BU
+67	Forward Follow Spot YE/CN/VT
+68	Backward Follow Spot YE/CN/VT
+69	Forward Flutter 7 Colors
+70	Backward Flutter 7 Colors
+71	Forward Flutter RD/GN/BU
+72	Backward Flutter RD/GN/BU
+73	Forward Flutter BU/YE/CN
+74	Backward Flutter BU/YE/CN
+75	Forward Flutter CN/VT/WH
+76	Backward Flutter CN/VT/WH
+77	Hop 7 Colors
+78	Hop RD/GN/BU
+79	Hop YE/CN/VT
+80	Strobe White
+81	Forward Horse Race 7 Colors
+82	Backward Horse Race 7 Colors
+83	Forward Horse Race RD/GN/BU
+84	Backward Horse Race RD/GN/BU
+85	Forward Horse Race YE/CN/VT
+86	Backward Horse Race YE/CN/VT
+87	Forward Horse Race YE
+88	Backward Horse Race YE
+89	Forward Horse Race CN
+90	Backward Horse Race CN
+91	Forward Horse Race VT
+92	Backward Horse Race VT
+93	Forward Horse Race WH
+94	Backward Horse Race WH
+95	Forward Run 7 Colors
+96	Backward Run 7 Colors
+97	Forward Run RD
+98	Backward Run RD
+99	Forward Run GN
+100	Backward Run GN
+101	Forward Run BU
+102	Backward Run BU
+103	Forward Run YE
+104	Backward Run YE
+105	Forward Run CN
+106	Backward Run CN
+107	Forward Run VT
+108	Backward Run VT
+109	Forward Run WH
+110	Backward Run WH
+111	Forward Run RD/GN
+112	Backward Run RD/GN
+113	Forward Run GN/BU
+114	Backward Run GN/BU
+115	Forward Run BU/YE
+116	Backward Run BU/YE
+117	Forward Run YE/CN
+118	Backward Run YE/CN
+119	Forward Run CN/VT
+120	Backward Run CN/VT
+121	Forward Run VT/WH
+122	Backward Run VT/WH
+123	Forward Flow 7 Colors
+124	Backward Flow 7 Colors
+125	Forward Flow RD/GN/RD
+126	Backward Flow RD/GN/RD
+127	Forward Flow BU/GN/BU
+128	Backward Flow BU/GN/BU
+129	Forward Flow YE/GN/YE
+130	Backward Flow YE/GN/YE
+131	Forward Flow YE/CN/YE
+132	Backward Flow YE/CN/YE
+133	Forward Flow VT/CN/VT
+134	Backward Flow VT/CN/VT
+135	Forward Flow WH/VT/WH
+136	Backward Flow WH/VT/WH
+137	Forward Run 7 Colors ON WH
+138	Backward Run 7 Colors ON WH
+139	Forward Run RD ON WH
+140	Backward Run RD ON WH
+141	Forward Run GN ON WH
+142	Backward Run GN ON WH
+143	Forward Run BU ON WH
+144	Backward Run BU ON WH
+145	Forward Run YE ON GN
+146	Backward Run YE ON GN
+147	Forward Run CN ON RD
+148	Backward Run CN ON RD
+149	Forward Run VT ON BU
+150	Backward Run VT ON BU
+151	Forward Run YE ON WH
+152	Backward Run YE ON WH
+153	Close Curtain 7 COLOR
+154	Open Curtain 7 COLOR
+155	Close Curtain RD
+156	Open Curtain RD
+157	Close Curtain GN
+158	Open Curtain GN
+159	Close Curtain BU
+160	Open Curtain BU
+161	Close Curtain YE
+162	Open Curtain YE
+163	Close Curtain CN
+164	Open Curtain CN
+165	Close Curtain VT
+166	Open Curtain VT
+167	Close Curtain WH
+168	Open Curtain WH
+169	Close Curtain 7 Colors ON YE
+170	Open Curtain 7 Colors ON YE
+171	Close Curtain RD/GN/BU ON CN
+172	Open Curtain RD/GN/BU ON CN
+173	Close Curtain YE/CN/VT ON VT
+174	Open Curtain YE/CN/VT ON VT
+175	Forward Flow RD/GN/BU/YE
+176	Backward Flow RD/GN/BU/YE
+177	Forward Flow GN/BU/YE/CN
+178	Backward Flow GN/BU/YE/CN
+179	Forward Flow BU/YE/CN/VT
+180	Backward Flow BU/YE/CN/VT
+181	Forward Flow YE/CN/VT/WH
+182	Backward Flow YE/CN/VT/WH
+183	Forward Swab 7 COLORS
+184	Backward Swab 7 COLORS
+185	Forward Swab RD/GN/BU
+186	Backward Swab RD/GN/BU
+187	Forward Swab YE/CN/VT
+188	Backward Swab YE/CN/VT
+189	Forward Swab RD
+190	Backward Swab RD
+191	Forward Swab GN
+192	Backward Swab GN
+193	Forward Swab BU
+194	Backward Swab BU
+195	Forward Swab YE
+196	Backward Swab YE
+197	Forward Swab CN
+198	Forward Swab CN
+199	Forward Swab VT
+200	Forward Swab VT
+201	Forward Swab WH
+202	Forward Swab WH
+203	Open Curtain Swab 7 COLORS
+204	Close Curtain Swab 7 COLORS
+205	Open Curtain Swab RD/GN/BU
+206	Close Curtain Swab RD/GN/BU
+207	Open Curtain Swab BU/YE
+208	Close Curtain Swab BU/YE
+209	Open Curtain Swab CN/VT
+210	Close Curtain Swab CN/VT

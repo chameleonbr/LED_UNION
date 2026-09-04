@@ -1,0 +1,241 @@
+0	Basic	Auto Play
+1	Basic	Magic Forward
+2	Basic	Magic Back
+212	Basic	7-Color Energy
+193	Basic	7-Color Jump
+194	Basic	R-G-B Jump
+195	Basic	Y-C-P Jump
+196	Basic	7-Color Strobe
+197	Basic	R-G-B Strobe
+198	Basic	Y-C-P Strobe
+199	Basic	7-Color Gradual
+200	Basic	R-Y Gradual
+201	Basic	R-P Gradual
+202	Basic	G-C Gradual
+203	Basic	G-Y Gradual
+204	Basic	B-P Gradual
+205	Basic	Red Marquee
+206	Basic	Green Marquee
+207	Basic	Blue Marquee
+208	Basic	Yellow Marquee
+209	Basic	Cyan Marquee
+210	Basic	Purple Marquee
+211	Basic	White Marquee
+77	Basic	7-Color Race
+78	Basic	7-Color Race Back
+79	Basic	R-G-B Race
+80	Basic	R-G-B Race Back
+81	Basic	Y-C-P Race
+82	Basic	Y-C-P Race Back
+83	Basic	7-Color Wave
+84	Basic	7-Color Wave Back
+85	Basic	R-G-B Wave
+86	Basic	R-G-B Wave Back
+87	Basic	Y-C-P Wave
+88	Basic	Y-C-P Wave Back
+181	Basic	7-Color Flush
+182	Basic	7-Color Flush Back
+183	Basic	R-G-B Flush
+184	Basic	R-G-B Flush Back
+185	Basic	Y-C-P Flush
+186	Basic	Y-C-P Flush Back
+187	Basic	7-Color Flush Close
+188	Basic	7-Color Flush Open
+189	Basic	R-G-B Flush Close
+190	Basic	R-G-B Flush Open
+191	Basic	Y-C-P Flush Close
+192	Basic	Y-C-P Flush Open
+57	Curtain	7-Color Close
+58	Curtain	7-Color Open
+59	Curtain	R-G-B Close
+60	Curtain	R-G-B Open
+61	Curtain	Y-C-P Close
+62	Curtain	Y-C-P Open
+63	Curtain	Red Close
+64	Curtain	Red Open
+65	Curtain	Green Close
+66	Curtain	Green Open
+67	Curtain	Blue Close
+68	Curtain	Blue Open
+69	Curtain	Yellow Close
+70	Curtain	Yellow Open
+71	Curtain	Cyan Close
+72	Curtain	Cyan Open
+73	Curtain	Purple Close
+74	Curtain	Purple Open
+75	Curtain	White Close
+76	Curtain	White Open
+3	Trans	7-Color Trans
+4	Trans	7-Color Trans Back
+5	Trans	R-G-B Trans
+6	Trans	R-G-B Trans Back
+7	Trans	Y-C-P Trans
+8	Trans	Y-C-P Trans Back
+9	Trans	6-Color to Red
+10	Trans	6-Color to Red Back
+11	Trans	6-Color to Green
+12	Trans	6-Color to Green Back
+13	Trans	6-Color to Blue
+14	Trans	6-Color to Blue Back
+15	Trans	6-Color to Cyan
+16	Trans	6-Color to Cyan Back
+17	Trans	6-Color to Yellow
+18	Trans	6-Color to Yellow Back
+19	Trans	6-Color to Purple
+20	Trans	6-Color to Purple Back
+21	Trans	6-Color to White
+22	Trans	6-Color to White Back
+39	Water	7-Color Water
+40	Water	7-Color Water Back
+41	Water	R-G-B Water
+42	Water	R-G-B Water Back
+43	Water	Y-C-P Water
+44	Water	Y-C-P Water Back
+45	Water	R-G Water
+46	Water	R-G Water Back
+47	Water	G-B Water
+48	Water	G-B Water Back
+49	Water	Y-B Water
+50	Water	Y-B Water Back
+51	Water	Y-C Water
+52	Water	Y-C Water Back
+53	Water	C-P Water
+54	Water	C-P Water Back
+55	Water	White Water
+56	Water	White Water Back
+143	Flow	W-R-W Flow
+144	Flow	W-R-W Flow Back
+145	Flow	W-G-W Flow
+146	Flow	W-G-W Flow Back
+147	Flow	W-B-W Flow
+148	Flow	W-B-W Flow Back
+149	Flow	W-Y-W Flow
+150	Flow	W-Y-W Flow Back
+151	Flow	W-C-W Flow
+152	Flow	W-C-W Flow Back
+153	Flow	W-P-W Flow
+154	Flow	W-P-W Flow Back
+155	Flow	R-W-R Flow
+156	Flow	R-W-R Flow Back
+157	Flow	G-W-G Flow
+158	Flow	G-W-G Flow Back
+159	Flow	B-W-B Flow
+160	Flow	B-W-B Flow Back
+161	Flow	Y-W-Y Flow
+162	Flow	Y-W-Y Flow Back
+163	Flow	C-W-C Flow
+164	Flow	C-W-C Flow Back
+165	Flow	P-W-P Flow
+166	Flow	P-W-P Flow Back
+23	Tail	7-Color Tail
+24	Tail	7-Color Tail Back
+25	Tail	Red Tail
+26	Tail	Red Tail Back
+27	Tail	Green Tail
+28	Tail	Green Tail Back
+29	Tail	Blue Tail
+30	Tail	Blue Tail Back
+31	Tail	Yellow Tail
+32	Tail	Yellow Tail Back
+33	Tail	Cyan Tail
+34	Tail	Cyan Tail Back
+35	Tail	Purple Tail
+36	Tail	Purple Tail Back
+37	Tail	White Tail
+38	Tail	White Tail Back
+89	Run	Red Running
+91	Run	Green Running
+93	Run	Blue Running
+95	Run	Yellow Running
+97	Run	Cyan Running
+99	Run	Purple Running
+101	Run	White Running
+103	Run	7-Color Running
+105	Run	R-G-B Running
+107	Run	Y-C-P Running
+109	Run	B-P-C-Y Running
+111	Run	B-G-C-Y Running
+113	Run	Red-Dot in White Running
+115	Run	Green-Dot in Red Running
+117	Run	Blue-Dot in Green Running
+119	Run	Yellow-Dot in Blue Running
+121	Run	Cyan-Dot in Yellow Running
+123	Run	Purple-Dot in Cyan Running
+125	Run	White-Dot in Purple Running
+127	Run	White-Dot in Red Running
+129	Run	7-Color in Red Running
+131	Run	7-Color in Green Running
+133	Run	7-Color in Blue Running
+135	Run	7-Color in Yellow Running
+137	Run	7-Color in Cyan Running
+139	Run	7-Color in Purple Running
+141	Run	7-Color in White Running
+167	Run	Green-Dot in Blue Running
+169	Run	Green-Dot in Red Running
+171	Run	Red-Dot in Blue Running
+173	Run	Cyan-Dot in Yellow Running
+175	Run	Yellow-Dot in Purple Running
+177	Run	White-Dot in Yelllow Running
+179	Run	Yellow-Dot in White Running
+90	RunBack	Red Run Back
+92	RunBack	Green Run Back
+94	RunBack	Blue Run Back
+96	RunBack	Yellow Run Back
+98	RunBack	Cyan Run Back
+100	RunBack	Purple Run Back
+102	RunBack	White Run Back
+104	RunBack	7-Color Run Back
+106	RunBack	R-G-B Run Back
+108	RunBack	Y-C-P Run Back
+110	RunBack	B-P-C-Y Run Back
+112	RunBack	B-G-C-Y Run Back
+114	RunBack	Red-Dot in White Run Back
+116	RunBack	Green-Dot in Red Run Back
+118	RunBack	Blue-Dot in Green Run Back
+120	RunBack	Yellow-Dot in Blue Run Back
+122	RunBack	Cyan-Dot in Yellow Run Back
+124	RunBack	Purple-Dot in Cyan Run Back
+126	RunBack	White-Dot in Purple Run Back
+128	RunBack	White-Dot in Red Run Back
+130	RunBack	7-Color in Red Run Back
+132	RunBack	7-Color in Green Run Back
+134	RunBack	7-Color in Blue Run Back
+136	RunBack	7-Color in Yellow Run Back
+138	RunBack	7-Color in Cyan Run Back
+140	RunBack	7-Color in Purple Run Back
+142	RunBack	7-Color in White Run Back
+168	RunBack	Green-Dot in Blue Run Back
+170	RunBack	Green-Dot in Red Run Back
+172	RunBack	Red-Dot in Blue Run Back
+174	RunBack	Cyan-Dot in Yellow Run Back
+176	RunBack	Yellow-Dot in Purple Run Back
+178	RunBack	White-Dot in Yelllow Run Back
+180	RunBack	Yellow-Dot in White Run Back
+1	Scenes	Sunrise
+2	Scenes	Sunset
+3	Scenes	Birthday
+4	Scenes	Candlelight
+5	Scenes	Fireworks
+6	Scenes	Party
+7	Scenes	Datiny
+8	Scenes	Starry sky
+9	Scenes	Romantic
+10	Scenes	Disco
+11	Scenes	Rainbow
+12	Scenes	Movie
+13	Scenes	Christmas
+14	Scenes	Flowing
+15	Scenes	Sleeping
+16	Scenes	Ocean
+17	Scenes	Forest
+18	Scenes	Reading
+19	Scenes	Working
+20	Scenes	Dazzle
+21	Scenes	Gentle
+22	Scenes	Wedding
+23	Scenes	Snow
+24	Scenes	Fire
+25	Scenes	Lightning
+26	Scenes	Valentine\'s Day
+27	Scenes	Hallowmas
+28	Scenes	Warnning
