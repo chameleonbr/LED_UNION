@@ -85,14 +85,22 @@
     ['consultar', '7E 00 01 FA 00 00 00 00 EF'],
   ]
 
+  /** Static red is unmistakable, so it identifies the effect frame at a glance. */
+  const effectCandidates: Array<[string, string]> = [
+    ['F · efeito app', '7E 05 03 80 03 FF FF 00 EF'],
+    ['G · efeito hw', '7E 07 03 80 03 FF FF 00 EF'],
+    ['H · efeito 00', '7E 00 03 80 03 00 00 00 EF'],
+    ['I · efeito 06', '7E 05 03 80 06 FF FF 00 EF'],
+  ]
+
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
   /** Fire every candidate with a gap, so the one that works is visible. */
-  async function sweep() {
+  async function sweep(set = candidates, what = 'ligar') {
     if (!deviceId) return
     busy = true
-    note('--- varredura: olhe a fita e anote qual letra acendeu ---')
-    for (const [label, frame] of candidates) {
+    note(`--- varredura ${what}: olhe a fita e anote qual letra reagiu ---`)
+    for (const [label, frame] of set) {
       try {
         await sendRaw(deviceId, parseHex(frame), charUuid || undefined)
         note(`${label}  →  ${frame}`)
@@ -150,8 +158,11 @@
       <input type="text" bind:value={hex} style="font-family:ui-monospace,monospace" />
     </label>
     <button class="primary" onclick={send} disabled={!deviceId || busy}>Enviar</button>
-    <button onclick={sweep} disabled={!deviceId || busy}>
-      Varrer candidatos de ligar (5 × 1,5 s)
+    <button onclick={() => sweep()} disabled={!deviceId || busy}>
+      Varrer ligar (5 × 1,5 s)
+    </button>
+    <button onclick={() => sweep(effectCandidates, 'efeito')} disabled={!deviceId || busy}>
+      Varrer efeito → vermelho estático (4 × 1,5 s)
     </button>
     <div class="row wrap" style="gap:6px">
       {#each presets as [label, frame]}

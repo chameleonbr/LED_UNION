@@ -38,6 +38,40 @@ Os recursos não são empacotados, então isso é sólido:
 O "binding" + anti-clone é o ponto de risco: pode haver um desafio/resposta na conexão,
 não só um frame de senha fixo.
 
+## Evidência da UI do app original (capturas)
+
+O app rodando mostra a superfície de recursos, o que restringe muito o protocolo:
+
+- **Roda de cor RGB** com leitura `255,255,255` e 7 presets (R G B Y M C W).
+- **13 efeitos embutidos + 2 slots DIY.** Miniaturas: 1–7 são as sete cores estáticas
+  (R G B Y M C W); 8 = barras de sete cores; 9 = R/preto/G/preto/B; 10 = gradiente
+  arco-íris; 11 = multi com preto; 12 = vermelho esmaecendo; 13 = R/preto/B/preto.
+- **Sliders de brilho e de velocidade** na tela de efeitos.
+- **Microfone e Music Player.**
+- **Configurações: `3CH-RGB` / `4CH-RGBW`** (rádio, 3CH selecionado) — casa com o
+  `szChannel` dos recursos.
+
+### Hipótese forte sobre os efeitos
+
+O conjunto canônico ELK/BLEDOM `0x80..0x8C` tem **exatamente 13 valores**, e o caráter
+de cada um bate com as miniaturas:
+
+| BLEDIM | efeito | candidato ELK |
+|---|---|---|
+| 1–7 | sete cores estáticas | `0x80`–`0x86` |
+| 8 | barras de sete cores | `0x88` seven color jumping |
+| 9 | três cores com preto | `0x87` three color jumping |
+| 10 | gradiente arco-íris | `0x8A` seven color cross fade |
+| 11 | multi com preto | `0x89` three color cross fade |
+| 12 | vermelho esmaecendo | `0x8B` red gradual |
+| 13 | duas cores com preto | `0x8C` green gradual (ou variante) |
+
+A ordem das estáticas no app difere da lista do Lotus (que é R, Blue, Green, …), então o
+mapeamento exato ainda precisa de confirmação — mas a contagem e o caráter apontam para
+um aparelho de classe ELK-BLEDOM, o que é coerente com ele anunciar `FFF0`.
+
+**Ainda não confirmado:** a característica de escrita e o formato exato do frame.
+
 ## Como descobrir
 
 Em ordem de custo:
