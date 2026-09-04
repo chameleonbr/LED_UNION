@@ -7,6 +7,24 @@
 **Nada do protocolo é conhecido.** Nem o UUID do serviço, nem o da característica,
 nem o formato dos frames.
 
+### Versões testadas — todas empacotadas
+
+| versão | packer | payload | DEX em claro |
+|---|---|---|---|
+| 3.11 | 360 Jiagu | `assets/libjiagu*.so` | não |
+| 3.13 | Bangcle/SecNeo (`com.wrapper.proxyapplication`) | `assets/0OO00l111l1l`, 928 KB, entropia 7,95 | não |
+| 3.16 | 360 Jiagu | `assets/libjiagu*.so`, entropia 7,88 | não |
+
+O desenvolvedor trocou de packer entre versões, então versões anteriores à adoção
+de proteção provavelmente são analisáveis. O app existe desde 2016.
+
+**Como reconhecer uma versão limpa sem ferramenta:** `unzip -l` não mostra
+`libjiagu*.so` nem `libshell-super.*`, e o `classes.dex` tem centenas de KB em vez de
+dezenas.
+
+O `jiagu_unpacker` (SafaSafari) não serve aqui: ele assume o payload dentro do
+`classes.dex`, e nesta variante ele está no `.so`.
+
 O APK está empacotado com **360 Jiagu**. O `classes.dex` contém apenas o stub
 (`com.stub.StubApp`, `com.tianyu.util.DtcLoader`) — jadx produz 5 arquivos, zero
 lógica. O código real está cifrado em `assets/libjiagu*.so` e só é decifrado em
