@@ -11,6 +11,7 @@ nem o formato dos frames.
 
 | versão | packer | payload | DEX em claro |
 |---|---|---|---|
+| vc 41 (2020) | 360 Jiagu | dentro do próprio `classes.dex`, após `map_end` | não |
 | 3.11 | 360 Jiagu | `assets/libjiagu*.so` | não |
 | 3.13 | Bangcle/SecNeo (`com.wrapper.proxyapplication`) | `assets/0OO00l111l1l`, 928 KB, entropia 7,95 | não |
 | 3.16 | 360 Jiagu | `assets/libjiagu*.so`, entropia 7,88 | não |
@@ -22,8 +23,29 @@ de proteção provavelmente são analisáveis. O app existe desde 2016.
 `libjiagu*.so` nem `libshell-super.*`, e o `classes.dex` tem centenas de KB em vez de
 dezenas.
 
-O `jiagu_unpacker` (SafaSafari) não serve aqui: ele assume o payload dentro do
-`classes.dex`, e nesta variante ele está no `.so`.
+### Anatomia da versão de 2020 (melhor alvo estático, ainda assim fechado)
+
+O `classes.dex` tem cabeçalho válido, mas suas seções acabam bem antes do fim:
+
+```
+file_size   773080        map_off    30580 (16 entradas)
+data_off    11856         map_end    30776
+data_size   18920         payload    742304 bytes até o EOF
+```
+
+O payload tem **entropia 8,00** — o máximo teórico, cifra forte sem estrutura
+detectável. jadx recupera 8 classes, todas stubs da Qihoo (`com/stub/StubApp`,
+`com/qihoo/util/*`). Nenhuma linha de código do app.
+
+O `jiagu_unpacker` (SafaSafari) não abre nenhuma das versões: ele lê o comprimento
+do shell nos últimos 4 bytes em big-endian, e aqui isso dá lixo (`0x10000000` na de
+2020, `0xC7862004` na 3.16). As chaves que ele carrega (`bajk3b4j3bvuoa3h` /
+`mers46ha35ga23hn`, AES-CBC) também não produzem DEX em nenhum offset testado —
+a saída permanece em entropia 7,95.
+
+**Conclusão:** escrever um decifrador de Jiagu para esta variante é projeto de
+pesquisa, não tarefa de uma sessão. Os caminhos viáveis são dinâmicos (dump de
+memória) ou observacionais (captura HCI, sondagem GATT ao vivo).
 
 O APK está empacotado com **360 Jiagu**. O `classes.dex` contém apenas o stub
 (`com.stub.StubApp`, `com.tianyu.util.DtcLoader`) — jadx produz 5 arquivos, zero
