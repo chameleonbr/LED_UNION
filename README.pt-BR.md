@@ -111,6 +111,14 @@ resto como está, reconectando quem tiver caído.
 O que cada card mostra é **o último comando enviado**, não uma leitura — BLE não devolve
 nada. Use o app original no meio e ele dessincroniza.
 
+O controle **Branco** é uma intenção, não um canal. Hardware com fio branco de verdade
+tem esse canal acionado; numa controladora só RGB o mesmo slider faz r = g = b, que é o
+que "branco nessa intensidade" significa ali. Mandar o canal branco para uma
+controladora RGB zera a cor e apaga a fita.
+
+O BLEDIM expõe um **modo de canal** (1 DIM, 2 CCT, 3 RGB, 4 RGBW) no topo do card,
+porque ele muda o significado dos outros controles.
+
 ## Cores e efeitos customizados
 
 A paleta é editável: escolha entre as cores salvas, adicione as suas na faixa RGB

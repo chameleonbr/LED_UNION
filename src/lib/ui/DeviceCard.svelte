@@ -78,8 +78,22 @@
     setLook(dkey, { speed: v })
   }
 
-  const setWhite = (v: number) =>
-    applyTo([dkey], (d, n) => d.white?.(v, n), 'white')
+  /**
+   * "White" is an intent, not a channel. On hardware with a real W wire it drives that
+   * channel; on an RGB-only controller the same intent is r = g = b. Driving the W
+   * channel there sends [W,0,0,0], which zeroes the colour and turns the strip off —
+   * which is exactly what it did before this.
+   */
+  async function setWhite(v: number) {
+    if (hasRealWhite) {
+      await applyTo([dkey], (d, n) => d.white?.(v, n), 'white')
+      return
+    }
+    const k = Math.round((v * 255) / 100)
+    await applyTo([dkey], (d, n, c) => d.rgb(k, k, k, n, c), 'rgb')
+    const hex = `#${[k, k, k].map((x) => x.toString(16).padStart(2, '0')).join('')}`
+    setLook(dkey, { colorHex: hex, effect: undefined, customEffectId: undefined })
+  }
   const setCct = (v: number) =>
     applyTo([dkey], (d, n) => d.cct?.(v, 100 - v, n), 'cct')
 
@@ -154,9 +168,12 @@
   const channelMode = $derived(
     store.devices.find((d) => d.id === conn.id)?.channelMode ?? 3,
   )
-  const showWhite = $derived(
+  /** True only when the controller actually has a separate white wire. */
+  const hasRealWhite = $derived(
     caps.white && !!conn.driver.white && (!isBledim || channelMode !== 3),
   )
+  // Offered on RGB-only hardware too, where it means r = g = b.
+  const showWhite = $derived(hasRealWhite || caps.rgb)
 
   let modeMsg = $state('')
 
@@ -217,6 +234,18 @@
       <button class="primary grow" onclick={() => power(true)}>{t('effects.on')}</button>
       <button class="grow" onclick={() => power(false)}>{t('effects.off')}</button>
     </div>
+
+    {#if isBledim}
+      <label class="field">
+        <span>{t('bledim.channels')}</span>
+        <select class="sel" value={channelMode}
+                onchange={(e) => pickChannelMode(+(e.currentTarget as HTMLSelectElement).value)}>
+          {#each CHANNEL_MODES as [v, lbl]}<option value={v}>{lbl}</option>{/each}
+        </select>
+      </label>
+      <div class="small muted">{t('bledim.channelsHint')}</div>
+      {#if modeMsg}<div class="small" style="color:var(--err)">{modeMsg}</div>{/if}
+    {/if}
 
     {#if caps.rgb}
       <label class="field">
@@ -293,7 +322,7 @@
 
     {#if showWhite}
       <label class="field">
-        <span>{t('effects.white')}</span>
+        <span>{t('effects.white')}{hasRealWhite ? '' : ` · ${t('effects.whiteRgb')}`}</span>
         <input type="range" min="0" max="100" value="0"
                oninput={(e) => setWhite(+(e.currentTarget as HTMLInputElement).value)} />
       </label>
@@ -305,18 +334,6 @@
         <input type="range" min="0" max="100" value="50"
                oninput={(e) => setCct(+(e.currentTarget as HTMLInputElement).value)} />
       </label>
-    {/if}
-
-    {#if isBledim}
-      <label class="field">
-        <span>{t('bledim.channels')}</span>
-        <select class="sel" value={channelMode}
-                onchange={(e) => pickChannelMode(+(e.currentTarget as HTMLSelectElement).value)}>
-          {#each CHANNEL_MODES as [v, lbl]}<option value={v}>{lbl}</option>{/each}
-        </select>
-      </label>
-      <div class="small muted">{t('bledim.channelsHint')}</div>
-      {#if modeMsg}<div class="small" style="color:var(--err)">{modeMsg}</div>{/if}
     {/if}
 
     {#if hasSound}

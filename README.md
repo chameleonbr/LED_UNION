@@ -111,6 +111,14 @@ and leaves everything else alone, reconnecting anything that dropped offline.
 What each card shows is **the last command sent**, not a reading — BLE gives nothing
 back. Use the vendor app in between and it will drift.
 
+The **White** control is an intent, not a channel. Hardware with a real white wire gets
+that channel driven; on an RGB-only controller the same slider sets r = g = b, which is
+what "white at this intensity" means there. Sending the white channel to an RGB
+controller zeroes the colour and turns the strip off.
+
+BLEDIM exposes a **channel mode** (1 DIM, 2 CCT, 3 RGB, 4 RGBW) at the top of its card,
+because it changes what the other controls mean.
+
 ## Colours and custom effects
 
 The palette is editable: pick from saved colours, add your own from the full 0–255 RGB
