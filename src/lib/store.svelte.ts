@@ -88,6 +88,17 @@ export function renameOutput(id: string, ch: number, label: string, fallback: st
  * Which channel byte reaches which physical output is firmware-specific, and the only
  * way to find out is to try. So the outputs are editable rather than fixed at 1 and 2.
  */
+/** For controllers whose outputs are protocol variants rather than channel numbers. */
+export function setVariantOutputs(
+  id: string,
+  variants: Array<{ id: string; label: string }>,
+) {
+  const d = store.devices.find((x) => x.id === id)
+  if (!d) return
+  d.outputs = variants.map((v, i) => ({ ch: i, label: v.label, variant: v.id }))
+  save()
+}
+
 export function addOutput(id: string, label: string) {
   const d = store.devices.find((x) => x.id === id)
   if (!d) return

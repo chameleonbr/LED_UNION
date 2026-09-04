@@ -30,15 +30,27 @@ const f = (...b: number[]) => new Uint8Array(b)
  */
 export type Layout = 'ble' | 'dmx' | 'dmxs' | 'smart' | 'sun' | 'like' | 'pho'
 
-export function layoutFor(name: string): Layout {
+export function layoutFor(name: string, variant?: string): Layout {
   if (/^LEDSMART/i.test(name)) return 'smart'
   if (/^LEDSUN/i.test(name)) return 'sun'
   if (/^LEDLIKE/i.test(name)) return 'like'
   if (/^LEDPHO/i.test(name)) return 'pho'
   if (/^(LEDDMX-0[24]|LEDCAR-02)/i.test(name)) return 'dmxs'
-  if (/^(LEDDMX|LEDCAR-01)/i.test(name)) return 'dmx'
+  // LEDCAR-01 drives two different kinds of output and picks between them by switching
+  // the whole envelope: 7E for the plain RGB light, 7B for the addressable strip. The
+  // original app threads an isCAR01DMX flag through every single call for this. Without
+  // a variant we default to the strip, which leaves the RGB output unreachable — so the
+  // UI is expected to split this controller into its two outputs.
+  if (/^LEDCAR-01/i.test(name)) return variant === 'ble' ? 'ble' : 'dmx'
+  if (/^LEDDMX/i.test(name)) return 'dmx'
   return 'ble'
 }
+
+/** LEDCAR-01's two outputs, which are protocol variants rather than channels. */
+const CAR01_VARIANTS = [
+  { id: 'ble', label: 'RGB' },
+  { id: 'dmx', label: 'SPI' },
+]
 
 // LEDSTAGE and LEDLIGHT use a different power frame than the rest of the 7E family.
 const isStage = (name: string) => /^(LEDSTAGE|LEDLIGHT)/i.test(name)
@@ -101,8 +113,10 @@ export const ffe0: Driver = {
     /^(LED[_ ]?BLE|LEDSTAGE|LEDLIGHT|LEDDMX|LEDCAR|LEDSMART|LEDSUN|LEDLIKE|LEDPHO)/i
       .test(name),
 
-  caps(name): Caps {
-    const l = layoutFor(name)
+  variants: (name) => (/^LEDCAR-01/i.test(name) ? CAR01_VARIANTS : []),
+
+  caps(name, variant): Caps {
+    const l = layoutFor(name, variant)
     return {
       rgb: !WHITE_ONLY.includes(l),
       white: l === 'dmxs' || l === 'smart',
@@ -113,11 +127,11 @@ export const ffe0: Driver = {
     }
   },
 
-  effects(name): Effect[] {
+  effects(name, variant): Effect[] {
     // LEDCAR ships its own table, and keeps it even on the variants that speak the
     // 7B envelope.
     if (/^LEDCAR/i.test(name)) return effects.ledcar
-    switch (layoutFor(name)) {
+    switch (layoutFor(name, variant)) {
       case 'dmx':
       case 'dmxs':
         return effects.leddmx
@@ -137,9 +151,9 @@ export const ffe0: Driver = {
 
   onConnect: (name, now) => (NEEDS_AUTH.test(name) ? [authFrame(now)] : []),
 
-  power(on, name, ch) {
+  power(on, name, ch, variant) {
     const v = on ? 0x01 : 0x00
-    switch (layoutFor(name)) {
+    switch (layoutFor(name, variant)) {
       case 'dmxs':
         return f(0x7b, 0x04, v, F, F, F, F, F, 0xbf)
       case 'dmx':
@@ -161,9 +175,9 @@ export const ffe0: Driver = {
     }
   },
 
-  rgb(r, g, b, name, ch) {
+  rgb(r, g, b, name, ch, variant) {
     const [R, G, B] = [byte(r), byte(g), byte(b)]
-    switch (layoutFor(name)) {
+    switch (layoutFor(name, variant)) {
       case 'dmxs':
         // Byte 6 is the white channel; 0 keeps it out of the mix.
         return f(0x7b, 0x07, R, G, B, 0x00, F, F, 0xbf)
@@ -182,9 +196,9 @@ export const ffe0: Driver = {
     }
   },
 
-  brightness(v, name, ch) {
+  brightness(v, name, ch, variant) {
     const b = pct(v)
-    switch (layoutFor(name)) {
+    switch (layoutFor(name, variant)) {
       case 'dmxs':
         return f(0x7b, 0x01, b, 0x00, F, F, F, F, 0xbf)
       case 'dmx':
@@ -202,9 +216,9 @@ export const ffe0: Driver = {
     }
   },
 
-  speed(v, name, ch) {
+  speed(v, name, ch, variant) {
     const s = pct(v)
-    switch (layoutFor(name)) {
+    switch (layoutFor(name, variant)) {
       case 'dmxs':
         return f(0x7b, 0x02, s, 0x00, F, F, F, F, 0xbf)
       case 'dmx':
@@ -222,9 +236,9 @@ export const ffe0: Driver = {
     }
   },
 
-  effect(e, name, ch) {
+  effect(e, name, ch, variant) {
     const id = byte(e.id)
-    switch (layoutFor(name)) {
+    switch (layoutFor(name, variant)) {
       // 0x03 selects a built-in mode; 0x13 is the user's DIY patterns. Feeding the
       // built-in table's ids to 0x13 was a bug.
       case 'dmxs':
@@ -244,9 +258,9 @@ export const ffe0: Driver = {
     }
   },
 
-  white(v, name) {
+  white(v, name, variant?: string) {
     const w = pct(v)
-    switch (layoutFor(name)) {
+    switch (layoutFor(name, variant)) {
       case 'dmxs':
         // This layout has its own dim opcode; do not borrow the rgb frame's white slot.
         return f(0x7b, 0x09, w, F, F, F, F, F, 0xbf)
@@ -272,10 +286,10 @@ export const ffe0: Driver = {
    * Most families use one opcode for both sound sources and a flag byte to pick
    * between them: the controller's own mic, or audio streamed from the phone.
    */
-  soundMode(mode, name, source, ch) {
+  soundMode(mode, name, source, ch, variant?: string) {
     const m = byte(mode)
     const music = source === 'music'
-    switch (layoutFor(name)) {
+    switch (layoutFor(name, variant)) {
       case 'dmxs':
         // No phone-audio variant exists here: the app only ever sends the mic mode,
         // and the flag byte differs between LEDCAR-02 and LEDDMX-02/04.
@@ -300,9 +314,9 @@ export const ffe0: Driver = {
     }
   },
 
-  soundSensitivity(v, name) {
+  soundSensitivity(v, name, variant?: string) {
     const s = pct(v)
-    switch (layoutFor(name)) {
+    switch (layoutFor(name, variant)) {
       case 'dmxs':
         return f(0x7b, 0x0c, s, F, F, F, F, F, 0xbf)
       case 'dmx':
@@ -323,8 +337,8 @@ export const ffe0: Driver = {
    * start command at all — the app's own setCustomCycle explicitly skips them, so
    * sending one would be inventing a frame.
    */
-  customEffect(spec, name): Uint8Array[] {
-    const l = layoutFor(name)
+  customEffect(spec, name, ch, variant): Uint8Array[] {
+    const l = layoutFor(name, variant)
     // These families have no colour-list command anywhere in the original app.
     if (l === 'sun' || l === 'like' || l === 'pho') return []
 
@@ -374,8 +388,8 @@ export const ffe0: Driver = {
     return out
   },
 
-  cct(warm, cool, name) {
-    switch (layoutFor(name)) {
+  cct(warm, cool, name, variant?: string) {
+    switch (layoutFor(name, variant)) {
       case 'dmxs':
         return f(0x7b, 0x0a, pct(cool), F, F, F, F, F, 0xbf)
       case 'sun':
@@ -398,8 +412,8 @@ export const ffe0: Driver = {
 // of the strip lighting, not as a failure.
 
 /** Only these layouts drive addressable strips. */
-export const isAddressable = (name: string) => {
-  const l = layoutFor(name)
+export const isAddressable = (name: string, variant?: string) => {
+  const l = layoutFor(name, variant)
   return l === 'dmx' || l === 'dmxs'
 }
 

@@ -29,8 +29,15 @@ export type StripConfig = {
   order: number
 }
 
-/** One physical output. `ch` goes straight into the frame's channel byte. */
-export type Output = { ch: number; label: string }
+/**
+ * One physical output.
+ *
+ * `ch` goes straight into the frame's channel byte, for controllers that address
+ * outputs that way. `variant` is for the ones that do not: LEDCAR-01 drives a plain RGB
+ * light and an addressable strip, and picks between them by switching the whole frame
+ * envelope rather than by a channel number.
+ */
+export type Output = { ch: number; label: string; variant?: string }
 
 /**
  * Only the real outputs. Channel 0 means "every output of this controller", which the

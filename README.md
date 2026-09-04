@@ -101,6 +101,12 @@ An **Everything** card at the bottom sets colour and brightness across the lot. 
 deliberately not there: effect ids are per family, so id 42 is one effect on LEDDMX and a
 different one on MELK.
 
+Some controllers pick an output by switching protocol rather than by a channel number.
+LEDCAR-01 drives a plain RGB light on the `7E` envelope and an addressable strip on
+`7B`; the original app threads an `isCAR01DMX` flag through every call for exactly this.
+Splitting one of those gives an **RGB** card and an **SPI** card, and only the SPI one
+offers strip configuration.
+
 Which channel byte reaches which physical output is firmware-specific, so the outputs
 are editable: add one, remove one, and change its channel number until the right light
 responds. If only one of two outputs reacts, the other is on a different number.

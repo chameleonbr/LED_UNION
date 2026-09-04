@@ -14,6 +14,7 @@
     dkey,
     conn,
     ch,
+    variant,
     label,
     checked,
     onToggle,
@@ -22,6 +23,7 @@
     dkey: string
     conn: Conn
     ch?: number
+    variant?: string
     label: string
     checked: boolean
     onToggle: (next: boolean) => void
@@ -31,8 +33,8 @@
   let open = $state(false)
 
   const look = $derived(lookOf(dkey))
-  const caps = $derived(conn.driver.caps(conn.name))
-  const builtIn = $derived<Effect[]>(conn.driver.effects(conn.name))
+  const caps = $derived(conn.driver.caps(conn.name, variant))
+  const builtIn = $derived<Effect[]>(conn.driver.effects(conn.name, variant))
   const supportsCustom = $derived(
     (conn.driver.customEffect?.({ colors: [{ r: 1, g: 1, b: 1 }], fade: false }, conn.name)
       ?.length ?? 0) > 0,
@@ -132,7 +134,7 @@
   }
 
   // --- addressable strip ------------------------------------------------------------
-  const addressable = $derived(isAddressable(conn.name))
+  const addressable = $derived(isAddressable(conn.name, variant))
   const savedStrip = $derived(store.devices.find((d) => d.id === conn.id)?.strip)
   let showStrip = $state(false)
   let pixels = $state(60)

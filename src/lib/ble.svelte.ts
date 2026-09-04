@@ -285,6 +285,17 @@ async function writeRaw(l: Live, frame: Uint8Array, driver?: Driver) {
 }
 
 /** Devices the current selection resolves to, skipping ones that are not live. */
+/**
+ * Some controllers select an output by switching protocol rather than by a channel
+ * byte, so the frame builders need to know which output a key refers to. It lives on
+ * the saved output, keyed by device and channel.
+ */
+export const variantOf = (deviceId: string, ch?: number): string | undefined =>
+  ch === undefined
+    ? undefined
+    : store.devices.find((d) => d.id === deviceId)?.outputs?.find((o) => o.ch === ch)
+        ?.variant
+
 export const targets = () =>
   [...new Set(selection.ids.map((k) => parseEp(k).deviceId))]
     .map((id) => conns[id])
@@ -296,7 +307,12 @@ export const targets = () =>
  */
 export async function applyTo(
   keys: string[],
-  build: (driver: Driver, name: string, ch?: number) => Uint8Array | undefined,
+  build: (
+    driver: Driver,
+    name: string,
+    ch?: number,
+    variant?: string,
+  ) => Uint8Array | undefined,
   coalesceKey?: string,
 ): Promise<void> {
   await Promise.allSettled(
@@ -306,7 +322,7 @@ export async function applyTo(
       const l = live.get(deviceId)
       if (!c || !l) return
       if (c.state !== 'online') await connect(deviceId)
-      const frame = build(c.driver, c.name, ch)
+      const frame = build(c.driver, c.name, ch, variantOf(deviceId, ch))
       if (!frame) return
       const op = () => writeRaw(l, frame, c.driver)
       // Coalescing is per output, or two outputs would cancel each other out.
@@ -319,7 +335,12 @@ export async function applyTo(
 
 /** Applies to whatever is currently selected. */
 export const apply = (
-  build: (driver: Driver, name: string, ch?: number) => Uint8Array | undefined,
+  build: (
+    driver: Driver,
+    name: string,
+    ch?: number,
+    variant?: string,
+  ) => Uint8Array | undefined,
   coalesceKey?: string,
 ) => applyTo(selection.ids, build, coalesceKey)
 
@@ -332,7 +353,7 @@ export const apply = (
  */
 export async function sendFrames(
   key: string,
-  build: (driver: Driver, name: string, ch?: number) => Uint8Array[],
+  build: (driver: Driver, name: string, ch?: number, variant?: string) => Uint8Array[],
 ): Promise<void> {
   const { deviceId, ch } = parseEp(key)
   const c = conns[deviceId]
@@ -340,7 +361,7 @@ export async function sendFrames(
   if (!c || !l) throw new Error('Aparelho não pareado nesta sessão')
   if (c.state !== 'online') await connect(deviceId)
 
-  for (const frame of build(c.driver, c.name, ch)) {
+  for (const frame of build(c.driver, c.name, ch, variantOf(deviceId, ch))) {
     await l.queue.push(() => writeRaw(l, frame, c.driver))
   }
 }

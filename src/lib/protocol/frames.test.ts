@@ -669,3 +669,29 @@ test('bledim brightness scales a static colour, and drives 0x88 for effects', as
   // Speed always drives 0x88 — it only means anything while an effect is running.
   assert.equal(bledim.speed(50, N)[3], 0x88)
 })
+
+test('LEDCAR-01 drives two outputs by switching envelope, not by channel', async () => {
+  const { layoutFor, ffe0: d } = await import('./ffe0.ts')
+  const N = 'LEDCAR-01-f09a'
+
+  // One output is a plain RGB light on the 7E envelope, the other an addressable strip
+  // on 7B. The original app threads an isCAR01DMX flag through every call for this.
+  assert.equal(layoutFor(N, 'ble'), 'ble')
+  assert.equal(layoutFor(N, 'dmx'), 'dmx')
+  // With no variant it stays on the strip, which is what it did before variants existed.
+  assert.equal(layoutFor(N), 'dmx')
+
+  assert.deepEqual(d.variants!(N).map((v) => v.id), ['ble', 'dmx'])
+  assert.deepEqual(d.variants!('LEDBLE-00-1'), [])
+
+  // The two outputs must not emit identical frames — that was the whole problem.
+  assert.equal(hex(d.rgb(255, 0, 0, N, undefined, 'ble')), '7e ff 05 03 ff 00 00 ff ef')
+  assert.equal(hex(d.rgb(255, 0, 0, N, undefined, 'dmx')), '7b ff 07 ff 00 00 00 ff bf')
+  assert.equal(hex(d.power(true, N, undefined, 'ble')), '7e ff 04 01 00 ff ff 00 ef')
+  assert.equal(hex(d.power(true, N, undefined, 'dmx')), '7b ff 04 01 ff ff ff ff bf')
+
+  // Only the strip output is addressable, so only it offers pixel configuration.
+  const { isAddressable } = await import('./ffe0.ts')
+  assert.equal(isAddressable(N, 'dmx'), true)
+  assert.equal(isAddressable(N, 'ble'), false)
+})
