@@ -13,6 +13,17 @@ export type Effect = { id: number; name: string; group?: string }
 export type SoundSource = 'mic' | 'music'
 
 /**
+ * A user-built colour sequence. Black is just another colour, so green → black → amber
+ * is a strobe.
+ */
+export type CustomEffectSpec = {
+  /** In play order, 0..255 per channel. */
+  colors: Array<{ r: number; g: number; b: number }>
+  /** Cross-fade between colours instead of jumping. */
+  fade: boolean
+}
+
+/**
  * One protocol family. Frames are built pure — no I/O here, so every builder is
  * unit-testable against the byte templates in docs/protocol/.
  */
@@ -62,6 +73,15 @@ export type Driver = {
   soundEnable?(on: boolean, name: string): Uint8Array
   /** Microphone sensitivity, 0..100. */
   soundSensitivity?(pct: number, name: string): Uint8Array
+
+  /**
+   * Frames for a user-built colour sequence, in the order they must be sent.
+   *
+   * Returns a list because the families differ wildly: BLEDIM fits the whole sequence
+   * in one frame, while the FFE0 families upload one frame per colour and then a start
+   * command. An empty list means the family has no such command at all.
+   */
+  customEffect?(spec: CustomEffectSpec, name: string, ch?: number): Uint8Array[]
   /** pct 0..100 */
   white?(pct: number, name: string): Uint8Array
   /** warm/cool 0..100 */

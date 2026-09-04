@@ -1,4 +1,4 @@
-import type { Caps, Driver, Effect, SoundSource } from './types.ts'
+import type { Caps, CustomEffectSpec, Driver, Effect, SoundSource } from './types.ts'
 import { byte, pct } from './types.ts'
 import effects from './effects.ts'
 
@@ -54,6 +54,12 @@ const isCar02 = (name: string) => /^LEDCAR-02/i.test(name)
 const PHO_GROUP = [0, 0, 0]
 /** Second parameter of the LEDPHO power and brightness frames: fixture segment. */
 const PHO_SEGMENT = 0
+
+/**
+ * The DIY slot the LEDSMART and LEDSTAGE uploads write into. The app passes it through
+ * from its UI; slot 0 is the one a user gets by default.
+ */
+const DIY_SLOT = 0
 
 /** The `7B FF` family sends brightness twice: scaled to 0..32, then raw. */
 const scale32 = (v: number) => Math.round((pct(v) * 32) / 100)
@@ -308,6 +314,64 @@ export const ffe0: Driver = {
       default:
         return f(0x7e, F, 0x07, s, F, F, F, F, 0xef)
     }
+  },
+
+  /**
+   * Upload one frame per colour, then start the cycle.
+   *
+   * Two things bite here. The index is **1-based**, and LEDSMART/LEDSTAGE have no
+   * start command at all — the app's own setCustomCycle explicitly skips them, so
+   * sending one would be inventing a frame.
+   */
+  customEffect(spec, name): Uint8Array[] {
+    const l = layoutFor(name)
+    // These families have no colour-list command anywhere in the original app.
+    if (l === 'sun' || l === 'like' || l === 'pho') return []
+
+    const total = byte(spec.colors.length)
+    if (!total) return []
+    // 254 fades between colours, 253 jumps. The app also has a 252 for LEDBLE whose
+    // meaning is unclear, so we stay on the two both families agree on.
+    const mode = spec.fade ? 0xfe : 0xfd
+    const out: Uint8Array[] = []
+
+    spec.colors.forEach((c, i) => {
+      const idx = byte(i + 1)
+      const [R, G, B] = [byte(c.r), byte(c.g), byte(c.b)]
+      switch (l) {
+        case 'dmxs':
+          out.push(f(0x7b, 0x0e, R, G, B, total, idx, mode, 0xbf))
+          break
+        case 'dmx':
+          out.push(f(0x7b, idx, 0x0e, mode, R, G, B, total, 0xbf))
+          break
+        case 'smart':
+          // No per-colour index here: the app sends a constant DIY slot and the
+          // controller appends in arrival order.
+          out.push(f(0x7d, 0x02, 0x03, DIY_SLOT, R, G, B, total, 0xdf))
+          break
+        default:
+          out.push(
+            isStage(name)
+              ? f(0x7e, F, 0x06, DIY_SLOT, R, G, B, total, 0xef)
+              : f(0x7e, idx, 0x0d, mode, R, G, B, total, 0xef),
+          )
+      }
+    })
+
+    switch (l) {
+      case 'dmxs':
+        out.push(f(0x7b, 0x0f, F, F, F, F, F, F, 0xbf))
+        break
+      case 'dmx':
+        out.push(f(0x7b, F, 0x0f, 0x01, F, F, F, F, 0xbf))
+        break
+      case 'smart':
+        break // no start command
+      default:
+        if (!isStage(name)) out.push(f(0x7e, F, 0x0f, 0x00, F, F, F, F, 0xef))
+    }
+    return out
   },
 
   cct(warm, cool, name) {

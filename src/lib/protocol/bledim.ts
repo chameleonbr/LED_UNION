@@ -1,4 +1,4 @@
-import type { Caps, Driver, Effect } from './types.ts'
+import type { Caps, CustomEffectSpec, Driver, Effect } from './types.ts'
 import { byte, clamp, pct } from './types.ts'
 
 // Protocol: docs/protocol/bledim.md
@@ -102,6 +102,10 @@ export const effects: Effect[] = Array.from({ length: 13 }, (_, i) => ({
 }))
 
 const SCENE_PARA_SIZE = 72
+/** ScenePara.MAX_COLOR_QTY in the original app. */
+const MAX_COLOR_QTY = 14
+/** Byte 14 sentinel: this scene has no built-in effect, the colour list drives it. */
+const NO_EFFECT = 0xff
 
 /**
  * An effect is applied by sending a whole 72-byte scene description, not an id.
@@ -186,6 +190,35 @@ export const bledim: Driver = {
   },
 
   effect: (e, name) => sceneFrame(name, e.id),
+
+  /**
+   * A whole colour sequence fits in one scene frame: the structure already carries up
+   * to MAX_COLOR_QTY = 14 entries, plus the fade flag and speed. No upload dance.
+   *
+   * Byte 14 is set to the "no built-in effect" sentinel, because what plays here is the
+   * colour list itself. Unverified on hardware.
+   */
+  customEffect(spec, name): Uint8Array[] {
+    const colors = spec.colors.slice(0, MAX_COLOR_QTY)
+    if (colors.length === 0) return []
+    const s = stateFor(name)
+    const p = new Array(SCENE_PARA_SIZE).fill(0)
+    p[0] = spec.fade ? 1 : 0
+    p[1] = s.speed
+    p[2] = s.brightness
+    p[3] = colors.length
+    p[4] = 0
+    p[6] = s.strobe
+    p[14] = NO_EFFECT
+    colors.forEach((c, i) => {
+      const o = 16 + i * 4
+      p[o] = 0 // white channel
+      p[o + 1] = byte(c.r)
+      p[o + 2] = byte(c.g)
+      p[o + 3] = byte(c.b)
+    })
+    return [frame(CMD.IMMEDIATE_SCENE, p)]
+  },
 
   /** This family toggles its hardware microphone explicitly. */
   soundEnable: (on) => frame(CMD.ENABLE_HW_AUDIO, [on ? 1 : 0, 0, 0, 0]),

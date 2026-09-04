@@ -1,71 +1,45 @@
-import type { Effect } from './protocol/index.ts'
+import {
+  empty,
+  migrate,
+  KEY,
+  LEGACY_KEY,
+  seedColors,
+  type CustomEffect,
+  type Group,
+  type Look,
+  type Output,
+  type Persisted,
+  type SavedColor,
+  type SavedDevice,
+  type Scene,
+  type StripConfig,
+} from './persist.ts'
 
-export type SavedDevice = {
-  id: string
-  /** Advertised name. Drives protocol decisions — never edit it. */
-  name: string
-  /** What the user calls it, e.g. "Carro · fita + maçaneta + soleira". */
-  label?: string
-  driverId: string
-  /**
-   * Physical outputs on a multi-output controller. Only the owner can see how the
-   * strips are wired, so this is opt-in per device rather than guessed.
-   */
-  outputs?: Output[]
-  /** Wiring of an addressable strip. Only the owner knows what is soldered on. */
-  strip?: StripConfig
-}
-
-/** How an addressable strip is physically wired. */
-export type StripConfig = {
-  /** Number of addressable pixels. */
-  pixels: number
-  /** Channel order id, from the rgb_order table. */
-  order: number
-}
-
-/** One physical output. `ch` goes straight into the frame's channel byte. */
-export type Output = { ch: number; label: string }
-
-/** Matches the LED1 / ALL / LED2 selector in the original app. */
-export const defaultOutputs = (): Output[] => [
-  { ch: 0, label: 'Todas' },
-  { ch: 1, label: 'Saída 1' },
-  { ch: 2, label: 'Saída 2' },
-]
-export type Group = { id: string; name: string; deviceIds: string[] }
-
-/** A snapshot to re-apply later. Only the fields that were actually set. */
-export type Scene = {
-  id: string
-  name: string
-  color?: string
-  brightness?: number
-  speed?: number
-  effect?: Effect
-}
-
-type Persisted = { devices: SavedDevice[]; groups: Group[]; scenes: Scene[] }
-
-const KEY = 'led-union/v1'
-/** The project was renamed; carry a previous install's devices and groups over. */
-const LEGACY_KEY = 'led-onion/v1'
-const empty: Persisted = { devices: [], groups: [], scenes: [] }
+export {
+  defaultOutputs,
+  seedColors,
+  migrate,
+  type CustomEffect,
+  type Group,
+  type Look,
+  type Output,
+  type SavedColor,
+  type SavedDevice,
+  type Scene,
+  type StripConfig,
+} from './persist.ts'
 
 function load(): Persisted {
   try {
     const raw = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY)
-    if (!raw) return structuredClone(empty)
-    return { ...structuredClone(empty), ...JSON.parse(raw) }
+    return migrate(raw ? JSON.parse(raw) : null)
   } catch {
     // Private windows and blocked site data both land here; start clean.
-    return structuredClone(empty)
+    return empty()
   }
 }
 
-const initial = load()
-
-export const store = $state<Persisted>(initial)
+export const store = $state<Persisted>(load())
 
 export function save() {
   try {
@@ -76,6 +50,8 @@ export function save() {
 }
 
 export const uid = () => Math.random().toString(36).slice(2, 10)
+
+// --- devices -----------------------------------------------------------------------
 
 export function rememberDevice(d: SavedDevice) {
   const existing = store.devices.find((x) => x.id === d.id)
@@ -101,10 +77,10 @@ export function setOutputs(id: string, outputs: Output[] | undefined) {
   save()
 }
 
-export function renameOutput(id: string, ch: number, label: string) {
+export function renameOutput(id: string, ch: number, label: string, fallback: string) {
   const o = store.devices.find((x) => x.id === id)?.outputs?.find((x) => x.ch === ch)
   if (!o) return
-  o.label = label.trim() || `Saída ${ch}`
+  o.label = label.trim() || fallback
   save()
 }
 
@@ -118,8 +94,18 @@ export function setStrip(id: string, strip: StripConfig) {
 export function forgetDevice(id: string) {
   store.devices = store.devices.filter((d) => d.id !== id)
   for (const g of store.groups) g.deviceIds = g.deviceIds.filter((x) => x !== id)
+  // Drop everything keyed to this device, including its outputs' looks.
+  for (const key of Object.keys(store.looks)) {
+    if (key === id || key.startsWith(`${id}#`)) delete store.looks[key]
+  }
+  for (const s of store.scenes) {
+    s.entries = s.entries.filter((e) => e.key !== id && !e.key.startsWith(`${id}#`))
+  }
+  store.scenes = store.scenes.filter((s) => s.entries.length > 0)
   save()
 }
+
+// --- groups ------------------------------------------------------------------------
 
 export function addGroup(name: string, deviceIds: string[]): Group {
   const g: Group = { id: uid(), name, deviceIds }
@@ -133,8 +119,68 @@ export function removeGroup(id: string) {
   save()
 }
 
-export function addScene(s: Omit<Scene, 'id'>): Scene {
-  const scene: Scene = { ...s, id: uid() }
+// --- looks -------------------------------------------------------------------------
+
+export const lookOf = (key: string): Look => store.looks[key] ?? {}
+
+export function setLook(key: string, patch: Look) {
+  store.looks[key] = { ...store.looks[key], ...patch }
+  save()
+}
+
+// --- palette -----------------------------------------------------------------------
+
+export function addColor(name: string, hex: string): SavedColor {
+  const c: SavedColor = { id: uid(), name: name.trim() || hex, hex }
+  store.colors.push(c)
+  save()
+  return c
+}
+
+export function removeColor(id: string) {
+  store.colors = store.colors.filter((c) => c.id !== id)
+  save()
+}
+
+export function resetColors() {
+  store.colors = seedColors()
+  save()
+}
+
+// --- custom effects ----------------------------------------------------------------
+
+export function addCustomEffect(e: Omit<CustomEffect, 'id'>): CustomEffect {
+  const fx: CustomEffect = { ...e, id: uid() }
+  store.customEffects.push(fx)
+  save()
+  return fx
+}
+
+export function updateCustomEffect(id: string, patch: Partial<CustomEffect>) {
+  const fx = store.customEffects.find((x) => x.id === id)
+  if (!fx) return
+  Object.assign(fx, patch)
+  save()
+}
+
+export function removeCustomEffect(id: string) {
+  store.customEffects = store.customEffects.filter((e) => e.id !== id)
+  // A look pointing at a deleted effect would render a blank name forever.
+  for (const look of Object.values(store.looks)) {
+    if (look.customEffectId === id) delete look.customEffectId
+  }
+  save()
+}
+
+// --- scenes ------------------------------------------------------------------------
+
+export function addScene(name: string, keys: string[]): Scene {
+  const scene: Scene = {
+    id: uid(),
+    name,
+    // Snapshot the looks now: the scene must not change when the lights do.
+    entries: keys.map((key) => ({ key, look: structuredClone(lookOf(key)) })),
+  }
   store.scenes.push(scene)
   save()
   return scene
@@ -142,5 +188,13 @@ export function addScene(s: Omit<Scene, 'id'>): Scene {
 
 export function removeScene(id: string) {
   store.scenes = store.scenes.filter((s) => s.id !== id)
+  save()
+}
+
+// --- locale ------------------------------------------------------------------------
+
+export function setLocale(locale: string | undefined) {
+  if (locale) store.locale = locale
+  else delete store.locale
   save()
 }

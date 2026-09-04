@@ -58,6 +58,17 @@ function framesFor(d: Driver, name: string): Row[] {
   add('sound_music', d.soundMode?.(3, name, 'music'))
   add('sound_on', d.soundEnable?.(true, name))
   add('sound_sens', d.soundSensitivity?.(PCTV, name))
+  // A custom sequence emits several frames; each has to stand up on its own.
+  const seq = d.customEffect?.(
+    { colors: [{ r: R, g: G, b: B }, { r: 0, g: 0, b: 0 }], fade: false },
+    name,
+  )
+  seq?.forEach((frame, i) => add(`custom_${i}`, frame))
+  const seqFade = d.customEffect?.(
+    { colors: [{ r: R, g: G, b: B }], fade: true },
+    name,
+  )
+  seqFade?.forEach((frame, i) => add(`custom_fade_${i}`, frame))
   for (const ch of [0, 1, 2]) {
     if (!d.hasChannels) break
     add(`rgb_ch${ch}`, d.rgb(R, G, B, name, ch))

@@ -89,6 +89,13 @@ export async function restore(): Promise<void> {
   } catch {
     // Not fatal — the chooser path still works.
   }
+
+  // Best-effort: walking in with the app already connected is the point. Chrome may
+  // still require a user gesture for the first connect after load, so a failure here
+  // is silent and the "Connect all" button remains the reliable path.
+  await Promise.allSettled(
+    Object.keys(conns).map((id) => connect(id).catch(() => {})),
+  )
 }
 
 /** Opens the browser's device chooser. One device per call, by design. */
@@ -271,12 +278,13 @@ export const targets = () =>
  * Build a frame per device (drivers differ) and write it to everything selected.
  * `coalesceKey` marks a stream where only the newest value matters.
  */
-export async function apply(
+export async function applyTo(
+  keys: string[],
   build: (driver: Driver, name: string, ch?: number) => Uint8Array | undefined,
   coalesceKey?: string,
 ): Promise<void> {
   await Promise.allSettled(
-    selection.ids.map(async (key) => {
+    keys.map(async (key) => {
       const { deviceId, ch } = parseEp(key)
       const c = conns[deviceId]
       const l = live.get(deviceId)
@@ -291,6 +299,34 @@ export async function apply(
         : l.queue.push(op)
     }),
   )
+}
+
+/** Applies to whatever is currently selected. */
+export const apply = (
+  build: (driver: Driver, name: string, ch?: number) => Uint8Array | undefined,
+  coalesceKey?: string,
+) => applyTo(selection.ids, build, coalesceKey)
+
+/**
+ * Send an ordered sequence of frames to one logical device.
+ *
+ * Uploading a custom effect means one frame per colour followed by a start command, and
+ * the device rejects the lot if a colour goes missing. So this always uses `push` —
+ * never `pushLatest`, whose whole job is to drop superseded writes.
+ */
+export async function sendFrames(
+  key: string,
+  build: (driver: Driver, name: string, ch?: number) => Uint8Array[],
+): Promise<void> {
+  const { deviceId, ch } = parseEp(key)
+  const c = conns[deviceId]
+  const l = live.get(deviceId)
+  if (!c || !l) throw new Error('Aparelho não pareado nesta sessão')
+  if (c.state !== 'online') await connect(deviceId)
+
+  for (const frame of build(c.driver, c.name, ch)) {
+    await l.queue.push(() => writeRaw(l, frame, c.driver))
+  }
 }
 
 export type CharInfo = { uuid: string; props: string[] }

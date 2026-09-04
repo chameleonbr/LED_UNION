@@ -553,3 +553,86 @@ test('LEDDMX effects use the built-in mode opcode, not the DIY one', () => {
   assert.equal(hex(ffe0.effect({ id: 42, name: 'x' }, 'LEDDMX-00-1')), '7b ff 03 2a ff ff ff ff bf')
   assert.equal(hex(ffe0.effect({ id: 42, name: 'x' }, 'LEDDMX-02-1')), '7b 03 2a ff ff ff ff ff bf')
 })
+
+test('custom colour sequences upload one frame per colour, then start', async () => {
+  const { fff0 } = await import('./fff0.ts')
+  const spec = {
+    colors: [
+      { r: 0x00, g: 0xff, b: 0x00 }, // green
+      { r: 0x00, g: 0x00, b: 0x00 }, // black — this is what makes it a strobe
+      { r: 0xff, g: 0xbb, b: 0x00 }, // amber
+    ],
+    fade: false,
+  }
+
+  // LEDBLE: 7E <idx> 0D <mode> <r> <g> <b> <total> EF, index 1-based, then start.
+  const ble = ffe0.customEffect!(spec, 'LEDBLE-00-1')
+  assert.equal(ble.length, 4, 'three colours plus the start command')
+  assert.equal(hex(ble[0]), '7e 01 0d fd 00 ff 00 03 ef')
+  assert.equal(hex(ble[1]), '7e 02 0d fd 00 00 00 03 ef')
+  assert.equal(hex(ble[2]), '7e 03 0d fd ff bb 00 03 ef')
+  assert.equal(hex(ble[3]), '7e ff 0f 00 ff ff ff ff ef')
+
+  // Fade swaps the mode byte to 0xFE.
+  assert.equal(hex(ffe0.customEffect!({ ...spec, fade: true }, 'LEDBLE-00-1')[0])
+    .split(' ')[3], 'fe')
+
+  // LEDDMX moves the opcode and reorders the parameters.
+  const dmx = ffe0.customEffect!(spec, 'LEDDMX-00-1')
+  assert.equal(hex(dmx[0]), '7b 01 0e fd 00 ff 00 03 bf')
+  assert.equal(hex(dmx[3]), '7b ff 0f 01 ff ff ff ff bf')
+
+  // The shifted layout puts the colour first and the index near the end.
+  const dmxs = ffe0.customEffect!(spec, 'LEDDMX-02-1')
+  assert.equal(hex(dmxs[0]), '7b 0e 00 ff 00 03 01 fd bf')
+  assert.equal(hex(dmxs[3]), '7b 0f ff ff ff ff ff ff bf')
+
+  // LEDSMART has no start command — the app's own setCustomCycle skips it, so sending
+  // one would be inventing a frame.
+  const smart = ffe0.customEffect!(spec, 'LEDSMART-1')
+  assert.equal(smart.length, 3, 'colours only, no start')
+  assert.equal(hex(smart[0]), '7d 02 03 00 00 ff 00 03 df')
+
+  // Families with no colour-list command at all say so instead of guessing.
+  for (const n of ['LEDSUN-1', 'LEDLIKE-1', 'LEDPHO-1']) {
+    assert.deepEqual(ffe0.customEffect!(spec, n), [], n)
+  }
+  assert.equal(fff0.customEffect, undefined, 'MELK/ELK have no such command')
+
+  // An empty sequence must not emit a bare start command.
+  assert.deepEqual(ffe0.customEffect!({ colors: [], fade: false }, 'LEDBLE-00-1'), [])
+})
+
+test('bledim fits a whole colour sequence in one scene frame', async () => {
+  const { bledim } = await import('./bledim.ts')
+  const spec = {
+    colors: [
+      { r: 0x00, g: 0xff, b: 0x00 },
+      { r: 0x00, g: 0x00, b: 0x00 },
+      { r: 0xff, g: 0xbb, b: 0x00 },
+    ],
+    fade: true,
+  }
+  const frames = bledim.customEffect!(spec, 'BLEDIM-fx')
+  assert.equal(frames.length, 1, 'no upload dance needed here')
+
+  const p = [...frames[0]].slice(6, -1)
+  assert.equal(p.length, 72)
+  assert.equal(p[0], 1, 'fade on')
+  assert.equal(p[3], 3, 'colour count')
+  assert.equal(p[14], 0xff, 'no built-in effect: the colour list drives it')
+  // Entries are [W, R, G, B] from offset 16.
+  assert.deepEqual(p.slice(16, 20), [0, 0x00, 0xff, 0x00])
+  assert.deepEqual(p.slice(20, 24), [0, 0x00, 0x00, 0x00])
+  assert.deepEqual(p.slice(24, 28), [0, 0xff, 0xbb, 0x00])
+  assert.deepEqual(p.slice(28, 32), [0, 0, 0, 0], 'unused entries stay zero')
+
+  // The structure holds 14 entries; anything past that is dropped rather than
+  // overflowing into the bytes after the colour table.
+  const many = Array.from({ length: 20 }, () => ({ r: 1, g: 2, b: 3 }))
+  const big = [...bledim.customEffect!({ colors: many, fade: false }, 'BLEDIM-fx2')[0]]
+  assert.equal(big.length, 6 + 72 + 1)
+  assert.equal(big.slice(6, -1)[3], 14)
+
+  assert.deepEqual(bledim.customEffect!({ colors: [], fade: false }, 'BLEDIM'), [])
+})
