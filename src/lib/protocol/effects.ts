@@ -573,4 +573,44 @@ export const ledpho: Effect[] = [
   {"id": 15, "name": "Breathe"},
 ]
 
-export default { melk, elk, ledble, ledcar, leddmx, ledlike, ledpho }
+export const chipModels: Effect[] = [
+  {"id": 1, "name": "UCS512A"},
+  {"id": 2, "name": "UCS512C"},
+]
+
+export const rgbOrders: Effect[] = [
+  {"id": 1, "name": "RGB"},
+  {"id": 2, "name": "RBG"},
+  {"id": 3, "name": "GRB"},
+  {"id": 4, "name": "GBR"},
+  {"id": 5, "name": "BRG"},
+  {"id": 6, "name": "BGR"},
+  {"id": 7, "name": "RGBW"},
+  {"id": 8, "name": "RBGW"},
+  {"id": 9, "name": "GRBW"},
+  {"id": 10, "name": "GBRW"},
+  {"id": 11, "name": "BRGW"},
+  {"id": 12, "name": "BGRW"},
+]
+
+export const rgbOrdersDmx02: Effect[] = [
+  {"id": 1, "name": "RGB"},
+  {"id": 2, "name": "RBG"},
+  {"id": 3, "name": "GRB"},
+  {"id": 4, "name": "GBR"},
+  {"id": 5, "name": "BRG"},
+  {"id": 6, "name": "BGR"},
+]
+
+export default {
+  melk,
+  elk,
+  ledble,
+  ledcar,
+  leddmx,
+  ledlike,
+  ledpho,
+  chipModels,
+  rgbOrders,
+  rgbOrdersDmx02,
+}

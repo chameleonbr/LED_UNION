@@ -12,6 +12,18 @@ export type SavedDevice = {
    * strips are wired, so this is opt-in per device rather than guessed.
    */
   outputs?: Output[]
+  /** Wiring of an addressable strip. Only the owner knows what is soldered on. */
+  strip?: StripConfig
+}
+
+/** How an addressable strip is physically wired. */
+export type StripConfig = {
+  /** Driver IC: 1 = UCS512A, 2 = UCS512C. */
+  chip: number
+  /** Number of addressable pixels. */
+  pixels: number
+  /** Channel order id, from the rgb_order table. */
+  order: number
 }
 
 /** One physical output. `ch` goes straight into the frame's channel byte. */
@@ -93,6 +105,13 @@ export function renameOutput(id: string, ch: number, label: string) {
   const o = store.devices.find((x) => x.id === id)?.outputs?.find((x) => x.ch === ch)
   if (!o) return
   o.label = label.trim() || `Saída ${ch}`
+  save()
+}
+
+export function setStrip(id: string, strip: StripConfig) {
+  const d = store.devices.find((x) => x.id === id)
+  if (!d) return
+  d.strip = strip
   save()
 }
 

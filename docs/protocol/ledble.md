@@ -205,6 +205,38 @@ consulta     72 12 00 FF FF FF FF FF 2F
 reset grupos 72 14 FF FF FF FF FF FF 2F
 ```
 
+## Fitas endereçáveis (SPI / pixel)
+
+As famílias **LEDDMX** e **LEDCAR** controlam fitas de LED endereçáveis. Os efeitos
+embutidos só renderizam corretamente depois que o controlador sabe como a fita está
+fisicamente ligada. Errar isso não dá erro: dá cor trocada ou meia fita acesa.
+
+```
+config    7B FF 05 <chip> <pixHi> <pixLo> <ordem> FF BF     (DMX-00/03)
+          7B FF 05 04    <pixHi> <pixLo> <ordem> FF BF      (CAR-01, chip fixo em 4)
+          7B 05 <ordem> <pixHi> <pixLo> FF FF FF BF         (DMX-02/04, CAR-02)
+chip      7B FF 03 <m> FF FF FF FF BF   /  7B 03 <m> FF FF FF FF FF BF
+sentido   7B FF 0D <d> FF FF FF FF BF   /  7B 0D <d> FF FF FF FF FF BF
+```
+
+A contagem de pixels é **big-endian** em dois bytes. Repare que o layout deslocado
+**reordena os parâmetros** — a ordem de canais vem primeiro e não há campo de chip.
+
+Do `ChipSelectActivity`, que nomeia os parâmetros:
+
+```java
+setConfigSPI(bannerType, (byte)(bannerPix >> 8), (byte)bannerPix, bannerSort)
+//           chip/IC      contagem de pixels (hi, lo)             ordem RGB
+```
+
+| tabela | arquivo | valores |
+|---|---|---|
+| chip | `chip_model.tsv` | 1 = UCS512A, 2 = UCS512C |
+| ordem dos canais | `rgb_order.tsv` | 12: RGB, RBG, GRB, GBR, BRG, BGR + as quatro variantes W |
+| ordem (deslocado) | `rgb_order_dmx02.tsv` | 6: só as permutações RGB |
+
+Efeitos dessas famílias: `dmx_model.tsv`, 211 entradas, com `255 = AUTO`.
+
 ### Handshake
 
 O `2A` só é enviado para `LEDBLE`, `LEDDMX` e `LEDCAR`. As outras quatro famílias

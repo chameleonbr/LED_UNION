@@ -271,3 +271,61 @@ export const ffe0: Driver = {
     }
   },
 }
+
+// ---------------------------------------------------------------------------
+// Addressable strips (SPI / pixel controllers)
+//
+// The DMX and CAR families drive individually addressable strips. Before the
+// built-in effects render correctly the controller has to be told how the strip is
+// physically wired: which driver IC, how many pixels, and what order the colour
+// channels come in. Getting these wrong shows up as the wrong colours or only part
+// of the strip lighting, not as a failure.
+
+/** Only these layouts drive addressable strips. */
+export const isAddressable = (name: string) => {
+  const l = layoutFor(name)
+  return l === 'dmx' || l === 'dmxs'
+}
+
+/** Driver ICs the app offers: 1 = UCS512A, 2 = UCS512C. */
+export const chipModels = effects.chipModels
+
+/** Channel orders. The shifted layouts only offer the six RGB permutations. */
+export const rgbOrdersFor = (name: string) =>
+  layoutFor(name) === 'dmxs' ? effects.rgbOrdersDmx02 : effects.rgbOrders
+
+/**
+ * Tell the controller how the strip is wired.
+ *
+ * `pixels` is sent big-endian across two bytes. Note the shifted layout reorders the
+ * parameters — the channel order comes first there, and it carries no chip field.
+ * LEDCAR-01 pins the chip type to 4.
+ */
+export function spiConfigFrame(
+  name: string,
+  opts: { chip: number; pixels: number; order: number },
+): Uint8Array {
+  const hi = (opts.pixels >> 8) & 0xff
+  const lo = opts.pixels & 0xff
+  const order = byte(opts.order)
+  if (layoutFor(name) === 'dmxs') {
+    return f(0x7b, 0x05, order, hi, lo, F, F, F, 0xbf)
+  }
+  const chip = isCar01(name) ? 0x04 : byte(opts.chip)
+  return f(0x7b, F, 0x05, chip, hi, lo, order, F, 0xbf)
+}
+
+/** Select the strip's driver IC. */
+export function chipModelFrame(name: string, model: number): Uint8Array {
+  return layoutFor(name) === 'dmxs'
+    ? f(0x7b, 0x03, byte(model), F, F, F, F, F, 0xbf)
+    : f(0x7b, F, 0x03, byte(model), F, F, F, F, 0xbf)
+}
+
+/** Which end of the strip effects run from. */
+export function directionFrame(name: string, forward: boolean): Uint8Array {
+  const d = forward ? 0x01 : 0x00
+  return layoutFor(name) === 'dmxs'
+    ? f(0x7b, 0x0d, d, F, F, F, F, F, 0xbf)
+    : f(0x7b, F, 0x0d, d, F, F, F, F, 0xbf)
+}

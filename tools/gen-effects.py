@@ -32,6 +32,13 @@ def main():
                      for r in tsv("like_mode.tsv", ["id", "name"])]),
         ("ledpho", [{"id": int(r["id"]), "name": r["name"]}
                     for r in tsv("pho_mode.tsv", ["id", "name"])]),
+        # Addressable-strip wiring options, not effects, but the same id/name shape.
+        ("chipModels", [{"id": int(r["id"]), "name": r["name"]}
+                        for r in tsv("chip_model.tsv", ["id", "name"])]),
+        ("rgbOrders", [{"id": int(r["id"]), "name": r["name"]}
+                       for r in tsv("rgb_order.tsv", ["id", "name"])]),
+        ("rgbOrdersDmx02", [{"id": int(r["id"]), "name": r["name"]}
+                            for r in tsv("rgb_order_dmx02.tsv", ["id", "name"])]),
     ]
     with open(OUT, "w") as fh:
         fh.write("// GENERATED from docs/protocol/*.tsv by tools/gen-effects.py"
@@ -42,7 +49,10 @@ def main():
             for r in rows:
                 fh.write("  " + json.dumps(r, ensure_ascii=False) + ",\n")
             fh.write("]\n\n")
-        fh.write("export default { melk, elk, ledble, ledcar, leddmx, ledlike, ledpho }\n")
+        fh.write("export default {\n")
+        for name, _ in tables:
+            fh.write(f"  {name},\n")
+        fh.write("}\n")
     print(OUT, {n: len(r) for n, r in tables})
 
 

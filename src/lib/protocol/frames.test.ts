@@ -473,3 +473,39 @@ test('bledim speed and brightness are remembered per device, not globally', asyn
   assert.equal(b[8], 0, 'B has its own speed')
   assert.equal(b[9], 255, 'B keeps the default brightness')
 })
+
+test('addressable strip configuration matches the app', async () => {
+  const { spiConfigFrame, chipModelFrame, directionFrame, isAddressable, rgbOrdersFor } =
+    await import('./ffe0.ts')
+
+  assert.equal(isAddressable('LEDDMX-00-1'), true)
+  assert.equal(isAddressable('LEDCAR-02-1'), true)
+  assert.equal(isAddressable('LEDBLE-00-1'), false)
+  assert.equal(isAddressable('LEDSMART-1'), false)
+
+  // 7B FF 05 <chip> <pixHi> <pixLo> <order> FF BF — pixel count is big-endian.
+  assert.equal(
+    hex(spiConfigFrame('LEDDMX-00-1', { chip: 2, pixels: 300, order: 3 })),
+    '7b ff 05 02 01 2c 03 ff bf',
+  )
+  // LEDCAR-01 pins the chip field to 4.
+  assert.equal(
+    hex(spiConfigFrame('LEDCAR-01-1', { chip: 2, pixels: 60, order: 1 })),
+    '7b ff 05 04 00 3c 01 ff bf',
+  )
+  // The shifted layout puts the order first and drops the chip field.
+  assert.equal(
+    hex(spiConfigFrame('LEDDMX-02-1', { chip: 2, pixels: 300, order: 3 })),
+    '7b 05 03 01 2c ff ff ff bf',
+  )
+
+  assert.equal(hex(chipModelFrame('LEDDMX-00-1', 2)), '7b ff 03 02 ff ff ff ff bf')
+  assert.equal(hex(chipModelFrame('LEDDMX-02-1', 2)), '7b 03 02 ff ff ff ff ff bf')
+  assert.equal(hex(directionFrame('LEDDMX-00-1', true)), '7b ff 0d 01 ff ff ff ff bf')
+  assert.equal(hex(directionFrame('LEDDMX-02-1', false)), '7b 0d 00 ff ff ff ff ff bf')
+
+  // The shifted layouts only offer the six RGB permutations; the others add RGBW.
+  assert.equal(rgbOrdersFor('LEDDMX-00-1').length, 12)
+  assert.equal(rgbOrdersFor('LEDDMX-02-1').length, 6)
+  assert.equal(rgbOrdersFor('LEDDMX-00-1')[0].name, 'RGB')
+})

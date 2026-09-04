@@ -72,6 +72,16 @@ Adicionar uma família nova = um arquivo em `src/lib/protocol/` que implementa
 `Driver`, mais uma linha no registry. Os builders são funções puras, então cada um
 ganha um teste que compara os bytes com o que está documentado.
 
+## Fitas endereçáveis
+
+LEDDMX e LEDCAR controlam fitas de LED endereçáveis. Na aba **Efeitos**, com um desses
+aparelhos selecionado, aparece o painel **Fita endereçável**: contagem de pixels,
+ordem dos canais, chip da fita e sentido. Sem isso configurado, os 211 efeitos
+renderizam com cor trocada ou só em parte da fita — e não dá erro nenhum, o que torna
+o sintoma difícil de diagnosticar.
+
+A configuração fica salva por aparelho.
+
 ## Protocolo
 
 Ver `docs/protocol/`. Resumo do que é fácil errar:
