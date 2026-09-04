@@ -52,14 +52,47 @@ Um casa só por prefixo (a cena de 72 bytes do BLEDIM, cujo payload é copiado e
 
 ### O que isso pegou
 
+**Três bugs**, todos invisíveis para teste escrito à mão — porque meus testes
+afirmavam exatamente o que eu tinha entendido errado.
+
 O `iSceneNo` da estrutura de cena do BLEDIM (offset 4). Eu tinha posto `0xFF`,
 confundindo com o campo de cena do comando `0x88` — que aí sim usa 255. Os quatro
 buffers que o app constrói (`FlushEmptyBuf`, `FlushStaticBuf`, `FlushChaseColor`,
 `FlushChaseAuto`) zeram esse offset. Corrigido, com teste de regressão em
 `frames.test.ts`.
 
-Erro invisível para teste escrito à mão, porque meu teste afirmava exatamente o que
-eu tinha entendido errado.
+**2. Power do LEDCAR-01.** Eu o agrupei com o LEDDMX porque ambos usam o envelope
+`7B FF`. Mas o `turnOn` do app ramifica pelo **nome antes do envelope**:
+
+```
+LEDBLE / LEDCAR-00   7E FF 04 01 00 FF FF 00 EF
+LEDCAR-01            7B FF 04 01 FF FF FF FF BF   ← próprio
+LEDCAR-02            7B 04 01 FF FF FF FF FF BF
+LEDDMX               7B 04 04 01 FF FF FF FF BF
+```
+
+**3. Dim do LEDDMX-02 / LEDCAR-02.** Eu tinha inventado usar o slot branco do frame
+RGB (`7B 07 00 00 00 <w> …`). O app tem opcode dedicado: `7B 09 <v> FF FF FF FF FF BF`.
+
+## Os 289 literais que não emitimos
+
+Não são lacunas — são, quase todos, fora do escopo deste app por decisão:
+
+| categoria | exemplos |
+|---|---|
+| agendamento | `sendTime`, `endTime`, `closeTime`, `timeSun`, `setSmartTimer*` |
+| configuração de hardware | `setSPIModel`, `setConfigSPI`, contagem de pixels, direção, ordem de pinos |
+| específico de carro | `setCar02SetWelcomeMode`, `TurnMode`, `BrakeMode`, `Motor*` |
+| áudio e música | `sendAudioBuf`, `enableHwAudio`, `setSensitivity`, `setMusicMicroMode` |
+| grafite / pixel art | `setCar02Graffiti`, `setDmx0204Graffiti` (envelope `7C`) |
+| listas DIY de cor | `setDiy`, `setCustomCycle`, `setChangeColor`, `setCollectMode` |
+| grupos do LEDPHO | `setPhoAddGroup`, `setPhoDelectGroup`, `setPhoResetGroup` |
+| variantes por canal | `7B FF 04 <03\|05\|07>` — power por canal, 43 formas |
+
+**Uma categoria vale implementar**: a **consulta de estado**
+(`readControllerInfo` `0x87`, `setCheck` `72 12`, `setSmartCheck` `7D 01 05`,
+`setPasswordFeedback` `2A 05`). Hoje a UI presume o estado; com isso ela leria o
+aparelho de verdade — ligado/desligado, cor atual, cena, contagem de canais.
 
 ## Limite
 

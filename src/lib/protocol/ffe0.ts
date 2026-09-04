@@ -42,6 +42,8 @@ export function layoutFor(name: string): Layout {
 
 // LEDSTAGE and LEDLIGHT use a different power frame than the rest of the 7E family.
 const isStage = (name: string) => /^(LEDSTAGE|LEDLIGHT)/i.test(name)
+// LEDCAR-01 shares the 7B FF layout with LEDDMX but has its own power frame.
+const isCar01 = (name: string) => /^LEDCAR-01/i.test(name)
 
 /**
  * LEDPHO addresses a group with three trailing bytes. The app leaves them at zero
@@ -133,7 +135,9 @@ export const ffe0: Driver = {
       case 'dmxs':
         return f(0x7b, 0x04, v, F, F, F, F, F, 0xbf)
       case 'dmx':
-        return f(0x7b, 0x04, 0x04, v, F, F, F, F, 0xbf)
+        return isCar01(name)
+          ? f(0x7b, F, 0x04, v, F, F, F, F, 0xbf)
+          : f(0x7b, 0x04, 0x04, v, F, F, F, F, 0xbf)
       case 'smart':
         return f(0x7d, 0x01, 0x01, v, F, F, F, F, 0xdf)
       case 'sun':
@@ -234,7 +238,8 @@ export const ffe0: Driver = {
     const w = pct(v)
     switch (layoutFor(name)) {
       case 'dmxs':
-        return f(0x7b, 0x07, 0x00, 0x00, 0x00, w, F, F, 0xbf)
+        // This layout has its own dim opcode; do not borrow the rgb frame's white slot.
+        return f(0x7b, 0x09, w, F, F, F, F, F, 0xbf)
       case 'dmx':
         // Same double-encoding as brightness: scaled to 0..32, then raw.
         return f(0x7b, F, 0x09, scale32(w), w, F, F, F, 0xbf)

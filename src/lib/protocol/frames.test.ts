@@ -189,7 +189,8 @@ test('LEDDMX-02 and LEDCAR-02 shift every parameter one byte left', () => {
   assert.equal(hex(ffe0.speed(50, n)), '7b 02 32 00 ff ff ff ff bf')
   assert.equal(hex(ffe0.effect({ id: 7, name: 'x' }, n)), '7b 13 07 ff ff ff ff ff bf')
   assert.equal(hex(ffe0.cct!(30, 70, n)), '7b 0a 46 ff ff ff ff ff bf')
-  assert.equal(hex(ffe0.white!(75, n)), '7b 07 00 00 00 4b ff ff bf')
+  // Dedicated dim opcode, confirmed against the app's own setDim branch.
+  assert.equal(hex(ffe0.white!(75, n)), '7b 09 4b ff ff ff ff ff bf')
   // LEDCAR-02 shares the layout.
   assert.equal(hex(ffe0.power(true, 'LEDCAR-02-1')), '7b 04 01 ff ff ff ff ff bf')
 })
@@ -406,4 +407,21 @@ test('bledim scene struct matches the buffers the app itself builds', async () =
   assert.equal(p[4], 0, 'iSceneNo is 0 here, not the 0x88 free-scene sentinel')
   assert.equal(p[14] & 0x80, 0x80, 'chase bit set')
   assert.equal(p[14] & 0x7f, 0, 'effect index in the low 7 bits')
+})
+
+test('LEDCAR-01 has its own power frame, not the LEDDMX one', () => {
+  // The app branches on the name before the envelope: LEDCAR-01 gets 7B FF 04,
+  // LEDDMX gets 7B 04 04, LEDCAR-02 gets 7B 04. Lumping them together was a bug.
+  assert.equal(hex(ffe0.power(true, 'LEDCAR-01-1')), '7b ff 04 01 ff ff ff ff bf')
+  assert.equal(hex(ffe0.power(false, 'LEDCAR-01-1')), '7b ff 04 00 ff ff ff ff bf')
+  assert.equal(hex(ffe0.power(true, 'LEDDMX-00-1')), '7b 04 04 01 ff ff ff ff bf')
+  assert.equal(hex(ffe0.power(true, 'LEDCAR-02-1')), '7b 04 01 ff ff ff ff ff bf')
+})
+
+test('the shifted DMX layout uses its own dim opcode', () => {
+  // Borrowing the rgb frame's white slot was a guess; the app has 7B 09.
+  assert.equal(hex(ffe0.white!(50, 'LEDDMX-02-1')), '7b 09 32 ff ff ff ff ff bf')
+  assert.equal(hex(ffe0.white!(50, 'LEDCAR-02-1')), '7b 09 32 ff ff ff ff ff bf')
+  // The unshifted one keeps the double encoding.
+  assert.equal(hex(ffe0.white!(50, 'LEDDMX-00-1')), '7b ff 09 10 32 ff ff ff bf')
 })
