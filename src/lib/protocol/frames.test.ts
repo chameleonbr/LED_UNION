@@ -274,12 +274,13 @@ test('bledim commands match docs/protocol/bledim.md', async () => {
   assert.deepEqual(body(bledim.rgb(10, 20, 30, 'BLEDIM')), [0, 10, 20, 30])
   assert.deepEqual(body(bledim.white!(100, 'BLEDIM')), [255, 0, 0, 0])
 
-  // Percent in, 0..255 on the wire, and speed/brightness share one command.
-  const bright = body(bledim.brightness(100, 'BLEDIM'))
+  // Percent in, 0..255 on the wire, and speed/brightness share one command. Use a name
+  // with no colour on it, so brightness takes the 0x88 path rather than rescaling.
+  const bright = body(bledim.brightness(100, 'BLEDIM-nocolor'))
   assert.equal(bright.length, 6)
   assert.equal(bright[0], 0xff, 'free scene')
   assert.equal(bright[3], 255, 'brightness scaled to 0..255')
-  const slow = body(bledim.speed(0, 'BLEDIM'))
+  const slow = body(bledim.speed(0, 'BLEDIM-nocolor'))
   assert.equal(slow[2], 0, 'speed scaled')
   assert.equal(slow[3], 255, 'brightness survives a speed change')
 
@@ -635,4 +636,36 @@ test('bledim fits a whole colour sequence in one scene frame', async () => {
   assert.equal(big.slice(6, -1)[3], 14)
 
   assert.deepEqual(bledim.customEffect!({ colors: [], fade: false }, 'BLEDIM'), [])
+})
+
+test('bledim brightness scales a static colour, and drives 0x88 for effects', async () => {
+  const { bledim } = await import('./bledim.ts')
+  const body = (f: Uint8Array) => [...f.subarray(6, f.length - 1)]
+  const N = 'BLEDIM-bri'
+
+  // With no colour sent yet there is nothing to scale, so it is the effects command.
+  assert.equal(bledim.brightness(50, N)[3], 0x88)
+
+  // Once a colour is showing, brightness rescales it — the app's colour screen has no
+  // brightness slider at all, it bakes brightness into the RGB value.
+  bledim.rgb(200, 100, 50, N)
+  const half = bledim.brightness(50, N)
+  assert.equal(half[3], 0x81, 'colour command, not 0x88')
+  const [w, r, g, b] = body(half)
+  assert.equal(w, 0)
+  // 50% maps to 127/255, so each channel comes back at roughly half.
+  assert.ok(Math.abs(r - 100) <= 2, `r=${r}`)
+  assert.ok(Math.abs(g - 50) <= 2, `g=${g}`)
+  assert.ok(Math.abs(b - 25) <= 2, `b=${b}`)
+
+  // Full brightness returns the original colour rather than drifting.
+  const full = body(bledim.brightness(100, N))
+  assert.deepEqual(full, [0, 200, 100, 50])
+
+  // An effect replaces the static colour, so brightness goes back to the 0x88 path.
+  bledim.effect({ id: 3, name: 'M4' }, N)
+  assert.equal(bledim.brightness(50, N)[3], 0x88)
+
+  // Speed always drives 0x88 — it only means anything while an effect is running.
+  assert.equal(bledim.speed(50, N)[3], 0x88)
 })

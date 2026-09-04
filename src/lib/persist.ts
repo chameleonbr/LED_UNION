@@ -14,6 +14,11 @@ export type SavedDevice = {
   outputs?: Output[]
   /** Wiring of an addressable strip. Only the owner knows what is soldered on. */
   strip?: StripConfig
+  /**
+   * BLEDIM channel mode: 1 = dimming, 2 = CCT, 3 = RGB, 4 = RGBW. There is no white
+   * channel in RGB mode, so the white control has to follow this.
+   */
+  channelMode?: number
 }
 
 /** How an addressable strip is physically wired. */

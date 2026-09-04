@@ -24,6 +24,7 @@ export const en: Dict = {
   'devices.outputsOn': 'This controller has separate outputs',
   'devices.outputsOff': 'Remove outputs',
   'devices.output': 'Output {n}',
+  'devices.addOutput': '+ Add output',
   'devices.renameHint': 'e.g. Car · strip + door handle',
   'devices.groups': 'Groups',
   'devices.groupName': 'Group name',
@@ -50,6 +51,10 @@ export const en: Dict = {
   'effects.saveScene': 'Save as scene',
   'effects.sceneName': 'Scene name',
   'effects.pickToSave': 'Tick the devices you want in the scene.',
+
+  'bledim.channels': 'Channel mode',
+  'bledim.channelsHint':
+    'How the controller is wired. There is no white channel in 3CH RGB mode, so the white control only appears on the others.',
 
   'strip.title': 'Addressable strip',
   'strip.pixels': 'Pixels',
@@ -120,6 +125,7 @@ export const ptBR: Dict = {
   'devices.outputsOn': 'Esta controladora tem saídas separadas',
   'devices.outputsOff': 'Remover saídas',
   'devices.output': 'Saída {n}',
+  'devices.addOutput': '+ Adicionar saída',
   'devices.renameHint': 'Ex: Carro · fita + maçaneta',
   'devices.groups': 'Grupos',
   'devices.groupName': 'Nome do grupo',
@@ -146,6 +152,10 @@ export const ptBR: Dict = {
   'effects.saveScene': 'Salvar como cena',
   'effects.sceneName': 'Nome da cena',
   'effects.pickToSave': 'Marque os aparelhos que devem entrar na cena.',
+
+  'bledim.channels': 'Modo de canal',
+  'bledim.channelsHint':
+    'Como a controladora está ligada. No modo 3CH RGB não existe canal branco, então o controle de branco só aparece nos outros.',
 
   'strip.title': 'Fita endereçável',
   'strip.pixels': 'Pixels',

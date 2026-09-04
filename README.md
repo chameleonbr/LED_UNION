@@ -101,6 +101,10 @@ An **Everything** card at the bottom sets colour and brightness across the lot. 
 deliberately not there: effect ids are per family, so id 42 is one effect on LEDDMX and a
 different one on MELK.
 
+Which channel byte reaches which physical output is firmware-specific, so the outputs
+are editable: add one, remove one, and change its channel number until the right light
+responds. If only one of two outputs reacts, the other is on a different number.
+
 Tick the devices you want and **save a scene**. Applying it touches only those devices
 and leaves everything else alone, reconnecting anything that dropped offline.
 

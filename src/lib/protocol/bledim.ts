@@ -66,7 +66,13 @@ const from100 = (v: number) => Math.round((pct(v) * 255) / 100)
  *
  * Defaults match the app's own ScenePara constructor.
  */
-type DeviceState = { speed: number; brightness: number; strobe: number }
+type DeviceState = {
+  speed: number
+  brightness: number
+  strobe: number
+  /** Last static colour sent, or undefined while an effect is playing. */
+  color?: { r: number; g: number; b: number }
+}
 const states = new Map<string, DeviceState>()
 const stateFor = (name: string): DeviceState => {
   let s = states.get(name)
@@ -175,13 +181,30 @@ export const bledim: Driver = {
   power: (on) => frame(CMD.ONOFF, [on ? 1 : 0]),
 
   // Payload order is W, R, G, B — white first.
-  rgb: (r, g, b) => frame(CMD.SELECT_COLOR, [0, byte(r), byte(g), byte(b)]),
+  rgb(r, g, b, name) {
+    const c = { r: byte(r), g: byte(g), b: byte(b) }
+    stateFor(name).color = c
+    return frame(CMD.SELECT_COLOR, [0, c.r, c.g, c.b])
+  },
 
   white: (v) => frame(CMD.SELECT_COLOR, [from100(v), 0, 0, 0]),
 
+  /**
+   * The original app has no brightness slider on its colour screen: brightness there is
+   * baked into the RGB value, and 0x88 belongs to the effects screen. So with a static
+   * colour showing, scale the colour; otherwise drive the effect.
+   */
   brightness(v, name) {
-    stateFor(name).brightness = from100(v)
-    return speedBrightness(name)
+    const s = stateFor(name)
+    s.brightness = from100(v)
+    if (!s.color) return speedBrightness(name)
+    const k = s.brightness / 255
+    return frame(CMD.SELECT_COLOR, [
+      0,
+      byte(s.color.r * k),
+      byte(s.color.g * k),
+      byte(s.color.b * k),
+    ])
   },
 
   speed(v, name) {
@@ -189,7 +212,10 @@ export const bledim: Driver = {
     return speedBrightness(name)
   },
 
-  effect: (e, name) => sceneFrame(name, e.id),
+  effect(e, name) {
+    delete stateFor(name).color
+    return sceneFrame(name, e.id)
+  },
 
   /**
    * A whole colour sequence fits in one scene frame: the structure already carries up
@@ -202,6 +228,7 @@ export const bledim: Driver = {
     const colors = spec.colors.slice(0, MAX_COLOR_QTY)
     if (colors.length === 0) return []
     const s = stateFor(name)
+    delete s.color
     const p = new Array(SCENE_PARA_SIZE).fill(0)
     p[0] = spec.fade ? 1 : 0
     p[1] = s.speed

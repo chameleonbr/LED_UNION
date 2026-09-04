@@ -101,6 +101,10 @@ maçaneta vira dois cards, então uma pode ficar azul e a outra âmbar.
 Um card **Todos** no fim ajusta cor e brilho de tudo de uma vez. Efeito fica de fora de
 propósito: os ids são por família, então o id 42 é um efeito no LEDDMX e outro no MELK.
 
+Qual byte de canal chega a qual saída física depende do firmware, então as saídas são
+editáveis: adicionar, remover e trocar o número do canal até a luz certa responder. Se
+só uma de duas saídas reage, a outra está em outro número.
+
 Marque os aparelhos que quiser e **salve uma cena**. Aplicar toca só neles e deixa o
 resto como está, reconectando quem tiver caído.
 

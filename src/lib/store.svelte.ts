@@ -84,6 +84,55 @@ export function renameOutput(id: string, ch: number, label: string, fallback: st
   save()
 }
 
+/**
+ * Which channel byte reaches which physical output is firmware-specific, and the only
+ * way to find out is to try. So the outputs are editable rather than fixed at 1 and 2.
+ */
+export function addOutput(id: string, label: string) {
+  const d = store.devices.find((x) => x.id === id)
+  if (!d) return
+  d.outputs ??= []
+  const next = d.outputs.reduce((m, o) => Math.max(m, o.ch), -1) + 1
+  d.outputs.push({ ch: next, label })
+  save()
+}
+
+export function removeOutput(id: string, ch: number) {
+  const d = store.devices.find((x) => x.id === id)
+  if (!d?.outputs) return
+  d.outputs = d.outputs.filter((o) => o.ch !== ch)
+  delete store.looks[`${id}#${ch}`]
+  if (d.outputs.length === 0) delete d.outputs
+  save()
+}
+
+/** Retargeting an output carries its look along, or the card would reset on renumber. */
+export function setOutputChannel(id: string, from: number, to: number) {
+  const d = store.devices.find((x) => x.id === id)
+  const o = d?.outputs?.find((x) => x.ch === from)
+  if (!d || !o || from === to) return
+  if (d.outputs!.some((x) => x.ch === to)) return
+  o.ch = to
+  const look = store.looks[`${id}#${from}`]
+  if (look) {
+    store.looks[`${id}#${to}`] = look
+    delete store.looks[`${id}#${from}`]
+  }
+  for (const s of store.scenes) {
+    for (const e of s.entries) {
+      if (e.key === `${id}#${from}`) e.key = `${id}#${to}`
+    }
+  }
+  save()
+}
+
+export function setChannelMode(id: string, mode: number) {
+  const d = store.devices.find((x) => x.id === id)
+  if (!d) return
+  d.channelMode = mode
+  save()
+}
+
 export function setStrip(id: string, strip: StripConfig) {
   const d = store.devices.find((x) => x.id === id)
   if (!d) return

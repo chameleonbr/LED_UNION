@@ -1,11 +1,12 @@
 <script lang="ts">
   import { applyTo, sendFrames, sendRaw, displayName, type Conn } from '../ble.svelte.ts'
-  import { lookOf, setLook, store, setStrip } from '../store.svelte.ts'
+  import { lookOf, setLook, store, setStrip, setChannelMode } from '../store.svelte.ts'
   import type { CustomEffect } from '../store.svelte.ts'
   import type { Effect } from '../protocol/index.ts'
   import {
     isAddressable, rgbOrdersFor, spiConfigFrame, directionFrame,
   } from '../protocol/ffe0.ts'
+  import { switchChannelsFrame } from '../protocol/bledim.ts'
   import { t } from '../i18n.svelte.ts'
   import ColorSelect from './ColorSelect.svelte'
 
@@ -146,6 +147,39 @@
   const setDirection = (forward: boolean) =>
     sendRaw(conn.id, directionFrame(conn.name, forward)).catch(() => {})
 
+  // --- BLEDIM channel mode -----------------------------------------------------------
+  // 1 = dimming, 2 = CCT, 3 = RGB, 4 = RGBW. There is physically no white wire in RGB
+  // mode, so offering a white slider there promises something the hardware cannot do.
+  const isBledim = $derived(conn.driver.id === 'bledim')
+  const channelMode = $derived(
+    store.devices.find((d) => d.id === conn.id)?.channelMode ?? 3,
+  )
+  const showWhite = $derived(
+    caps.white && !!conn.driver.white && (!isBledim || channelMode !== 3),
+  )
+
+  let modeMsg = $state('')
+
+  async function pickChannelMode(mode: number) {
+    // Save first: this describes how the hardware is wired, which stays true whether or
+    // not the frame reaches the device. Losing the choice because the strip was out of
+    // range would be worse than a stale controller.
+    setChannelMode(conn.id, mode)
+    modeMsg = ''
+    try {
+      await sendRaw(conn.id, switchChannelsFrame(mode))
+    } catch (e) {
+      modeMsg = e instanceof Error ? e.message : String(e)
+    }
+  }
+
+  const CHANNEL_MODES = [
+    [1, '1CH · DIM'],
+    [2, '2CH · CCT'],
+    [3, '3CH · RGB'],
+    [4, '4CH · RGBW'],
+  ] as const
+
   // --- sound ------------------------------------------------------------------------
   const hasSound = $derived(!!conn.driver.soundMode || !!conn.driver.soundEnable)
   let showSound = $state(false)
@@ -257,7 +291,7 @@
       </label>
     {/if}
 
-    {#if caps.white && conn.driver.white}
+    {#if showWhite}
       <label class="field">
         <span>{t('effects.white')}</span>
         <input type="range" min="0" max="100" value="0"
@@ -271,6 +305,18 @@
         <input type="range" min="0" max="100" value="50"
                oninput={(e) => setCct(+(e.currentTarget as HTMLInputElement).value)} />
       </label>
+    {/if}
+
+    {#if isBledim}
+      <label class="field">
+        <span>{t('bledim.channels')}</span>
+        <select class="sel" value={channelMode}
+                onchange={(e) => pickChannelMode(+(e.currentTarget as HTMLSelectElement).value)}>
+          {#each CHANNEL_MODES as [v, lbl]}<option value={v}>{lbl}</option>{/each}
+        </select>
+      </label>
+      <div class="small muted">{t('bledim.channelsHint')}</div>
+      {#if modeMsg}<div class="small" style="color:var(--err)">{modeMsg}</div>{/if}
     {/if}
 
     {#if hasSound}

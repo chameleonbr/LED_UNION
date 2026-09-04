@@ -5,6 +5,7 @@
   import {
     store, addGroup, removeGroup, renameDevice,
     setOutputs, renameOutput, defaultOutputs,
+    addOutput, removeOutput, setOutputChannel,
   } from '../store.svelte.ts'
   import { epKey } from '../endpoint.ts'
   import { t } from '../i18n.svelte.ts'
@@ -175,7 +176,21 @@
                       onclick={() => { editingOut = key; outDraft = o.label }}>
                 {o.label}
               </button>
-              <span class="small muted">ch {o.ch}</span>
+              <!-- Which channel byte drives which physical output is firmware-specific.
+                   If only one of two outputs responds, the other is on a different
+                   number — so the number is editable rather than fixed. -->
+              <label class="small muted row" style="gap:4px">
+                ch
+                <input class="ch" type="text" inputmode="numeric" value={o.ch}
+                  onchange={(e) => {
+                    const v = Number((e.currentTarget as HTMLInputElement).value)
+                    if (Number.isFinite(v) && v >= 0 && v <= 255) {
+                      setOutputChannel(c.id, o.ch, v)
+                    }
+                  }} />
+              </label>
+              <button class="ghost danger small" title={t('common.remove')}
+                      onclick={() => removeOutput(c.id, o.ch)}>✕</button>
             {/if}
           </div>
         {/each}
@@ -183,9 +198,17 @@
     {/if}
 
     {#if c.driver.hasChannels}
-      <button class="ghost small outputs-toggle" onclick={() => toggleOutputs(c.id)}>
-        {outs?.length ? t('devices.outputsOff') : t('devices.outputsOn')}
-      </button>
+      <div class="row outputs-toggle" style="gap:8px">
+        <button class="ghost small" onclick={() => toggleOutputs(c.id)}>
+          {outs?.length ? t('devices.outputsOff') : t('devices.outputsOn')}
+        </button>
+        {#if outs?.length}
+          <button class="ghost small"
+                  onclick={() => addOutput(c.id, t('devices.output', { n: outs.length + 1 }))}>
+            {t('devices.addOutput')}
+          </button>
+        {/if}
+      </div>
     {/if}
   {/each}
 
@@ -228,6 +251,13 @@
   .outputs-toggle {
     align-self: flex-start;
     margin-left: 22px;
+  }
+
+  .ch {
+    width: 3.2em;
+    min-height: 30px;
+    padding: 0 6px;
+    text-align: center;
   }
 
   .rename {
