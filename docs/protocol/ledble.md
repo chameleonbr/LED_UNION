@@ -100,7 +100,12 @@ velocidade 7E FF 02 <spd> 00 FF FF <ch> EF     NetConnectBle:2217
 efeito     7E <flag> 0E <id> FF FF FF <ch> EF  NetConnectBle:1852
 ```
 
-São **duas** saídas, não três. Nos outros ramos (`LEDBLE-00`, `-01`) o byte 7 é fixo
+**Observado em hardware** (LEDBLE-00-9B67, controlador de carro com fita + maçaneta +
+soleira): o frame de cor padrão com byte 7 = `FF` mudou **apenas a maçaneta**. Ou seja,
+o firmware trata o byte 7 como seletor de saída mesmo anunciando `LEDBLE-00`, e `FF`
+não significa "todas". Falta mapear qual valor atinge cada luz.
+
+São **duas** saídas segundo o código, não três. Nos outros ramos (`LEDBLE-00`, `-01`) o byte 7 é fixo
 (`FF` em cor, `00` em power) e não há seleção de saída documentada — então um
 controlador que separe luzes fisicamente mas anuncie `LEDBLE-00` precisa de
 confirmação no aparelho.

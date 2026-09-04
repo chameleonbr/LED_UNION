@@ -13,13 +13,18 @@ efeito ou cena de uma vez só.
 |---|---|---|
 | MELK-* (Magic Lantern) | `FFF0` / `FFF3` | ✅ implementado |
 | ELK- / XSL- / CLK- (Lotus Lantern) | `FFF0` / `FFF3` | ✅ implementado |
-| LEDBLE / LEDSTAGE / LEDLIGHT | `FFE0` / `FFE1` | ✅ implementado |
+| LEDBLE / LEDSTAGE / LEDLIGHT | `FFE0` / `FFE1` | ✅ **validado em hardware** |
 | LEDDMX / LEDCAR / LEDSMART / LEDSUN / LEDLIKE / LEDPHO | `FFE0` / `FFE1` | 📄 documentado, não implementado |
 | BLEDIM | desconhecido | ❌ ver `docs/protocol/bledim.md` |
 
-Nada disso foi testado contra hardware real ainda. Os frames vêm da engenharia
-reversa dos apps originais e batem byte a byte com o que está em `docs/protocol/`,
-mas a confirmação no aparelho ainda não aconteceu.
+O driver `ffe0` está **confirmado em hardware**: conexão, handshake `2A` e comando de
+cor funcionam num LEDBLE-00 real. As demais famílias continuam derivadas da
+decompilação e batem byte a byte com `docs/protocol/`, mas ainda sem confirmação
+no aparelho.
+
+**Em aberto:** o controlador testado tem várias saídas físicas (fita, maçaneta,
+soleira) e o frame de cor padrão só atinge uma delas. Ver a seção de canais em
+`docs/protocol/ledble.md`.
 
 ## Rodando no celular
 
