@@ -4,8 +4,9 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "es2023",
     "module": "esnext",
-    "types": ["svelte", "vite/client"],
+    "types": ["svelte", "vite/client", "node", "web-bluetooth"],
     "allowArbitraryExtensions": true,
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     /**
      * Typecheck JS in `.svelte` and `.js` files by default.

@@ -1,89 +1,102 @@
-<script>
-  import svelteLogo from './assets/svelte.svg'
-  import viteLogo from './assets/vite.svg'
-  import heroImg from './assets/hero.png'
-  import Counter from './lib/Counter.svelte'
+<script lang="ts">
+  import { onMount } from 'svelte'
+  import { conns, restore, selection, supported } from './lib/ble.svelte.ts'
+  import Devices from './lib/ui/Devices.svelte'
+  import Color from './lib/ui/Color.svelte'
+  import Effects from './lib/ui/Effects.svelte'
+  import Scenes from './lib/ui/Scenes.svelte'
+
+  type Tab = 'devices' | 'color' | 'effects' | 'scenes'
+  let tab = $state<Tab>('devices')
+
+  const tabs: Array<{ id: Tab; label: string }> = [
+    { id: 'devices', label: 'Aparelhos' },
+    { id: 'color', label: 'Cor' },
+    { id: 'effects', label: 'Efeitos' },
+    { id: 'scenes', label: 'Cenas' },
+  ]
+
+  const online = $derived(Object.values(conns).filter((c) => c.state === 'online').length)
+
+  onMount(() => { restore() })
 </script>
 
-<section id="center">
-  <div class="hero">
-    <img src={heroImg} class="base" width="170" height="179" alt="" />
-    <img src={svelteLogo} class="framework" alt="Svelte logo" />
-    <img src={viteLogo} class="vite" alt="Vite logo" />
+<header>
+  <div class="row spread">
+    <strong>LED Onion</strong>
+    <span class="small muted">
+      {selection.ids.length} selecionado(s) · {online} online
+    </span>
   </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/App.svelte</code> and save to test <code>HMR</code></p>
-  </div>
-  <Counter />
-</section>
+</header>
 
-<div class="ticks"></div>
+<main>
+  {#if !supported()}
+    <div class="card" style="border-color: var(--warn)">
+      <b>Web Bluetooth não disponível.</b>
+      <p class="small muted" style="margin:6px 0 0">
+        Use Chrome ou Edge. No Android, o site precisa estar em HTTPS ou em
+        <code>localhost</code>. iOS não suporta Web Bluetooth.
+      </p>
+    </div>
+  {:else if tab === 'devices'}
+    <Devices />
+  {:else if tab === 'color'}
+    <Color />
+  {:else if tab === 'effects'}
+    <Effects />
+  {:else}
+    <Scenes />
+  {/if}
+</main>
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true">
-      <use href="/icons.svg#documentation-icon"></use>
-    </svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank" rel="noreferrer">
-          <img class="logo" src={viteLogo} alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://svelte.dev/" target="_blank" rel="noreferrer">
-          <img class="button-icon" src={svelteLogo} alt="" />
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true">
-      <use href="/icons.svg#social-icon"></use>
-    </svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li>
-        <a href="https://github.com/vitejs/vite" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#github-icon"></use>
-          </svg>
-          GitHub
-        </a>
-      </li>
-      <li>
-        <a href="https://chat.vite.dev/" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#discord-icon"></use>
-          </svg>
-          Discord
-        </a>
-      </li>
-      <li>
-        <a href="https://x.com/vite_js" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#x-icon"></use>
-          </svg>
-          X.com
-        </a>
-      </li>
-      <li>
-        <a href="https://bsky.app/profile/vite.dev" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#bluesky-icon"></use>
-          </svg>
-          Bluesky
-        </a>
-      </li>
-    </ul>
-  </div>
-</section>
+<nav>
+  {#each tabs as t}
+    <button class="ghost" class:active={tab === t.id} onclick={() => (tab = t.id)}>
+      {t.label}
+    </button>
+  {/each}
+</nav>
 
-<div class="ticks"></div>
-<section id="spacer"></section>
+<style>
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 12px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+
+  main {
+    padding: 16px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+  }
+
+  nav button {
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+
+  nav button.active {
+    background: var(--surface-2);
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>

@@ -1,0 +1,155 @@
+import { WriteQueue } from './queue.ts'
+import { allServices, driverFor, type Driver } from './protocol/index.ts'
+import { rememberDevice, store } from './store.svelte.ts'
+
+export type ConnState = 'offline' | 'connecting' | 'online' | 'error'
+
+export type Conn = {
+  id: string
+  name: string
+  driver: Driver
+  state: ConnState
+  error?: string
+}
+
+type Live = {
+  device: BluetoothDevice
+  char?: BluetoothRemoteGATTCharacteristic
+  queue: WriteQueue
+}
+
+/** UI-visible connection state, keyed by device id. */
+export const conns = $state<Record<string, Conn>>({})
+
+/** Which devices commands apply to. Empty means nothing is targeted. */
+export const selection = $state<{ ids: string[] }>({ ids: [] })
+
+const live = new Map<string, Live>()
+
+export const supported = () =>
+  typeof navigator !== 'undefined' && 'bluetooth' in navigator
+
+function track(device: BluetoothDevice, driver: Driver) {
+  const name = device.name ?? '(sem nome)'
+  conns[device.id] = { id: device.id, name, driver, state: 'offline' }
+  if (!live.has(device.id)) {
+    live.set(device.id, { device, queue: new WriteQueue(driver.minGapMs) })
+  }
+  device.addEventListener('gattserverdisconnected', () => {
+    const c = conns[device.id]
+    if (c) c.state = 'offline'
+    const l = live.get(device.id)
+    if (l) l.char = undefined
+  })
+  rememberDevice({ id: device.id, name, driverId: driver.id })
+}
+
+/**
+ * Re-adopt devices the browser already has permission for, so a reload does not
+ * force the user back through the chooser. Chrome may gate getDevices() behind a
+ * flag; when it is missing or empty the saved list still drives the UI and each
+ * device is re-paired on demand.
+ */
+export async function restore(): Promise<void> {
+  if (!supported()) return
+  for (const d of store.devices) {
+    const driver = driverFor(d.name)
+    if (driver) conns[d.id] ??= { id: d.id, name: d.name, driver, state: 'offline' }
+  }
+  const getDevices = (navigator.bluetooth as any).getDevices?.bind(navigator.bluetooth)
+  if (!getDevices) return
+  try {
+    for (const device of (await getDevices()) as BluetoothDevice[]) {
+      const driver = driverFor(device.name ?? '')
+      if (driver) track(device, driver)
+    }
+  } catch {
+    // Not fatal — the chooser path still works.
+  }
+}
+
+/** Opens the browser's device chooser. One device per call, by design. */
+export async function addDevice(): Promise<Conn | undefined> {
+  const device = await navigator.bluetooth.requestDevice({
+    filters: allServices.map((s) => ({ services: [s] })),
+    optionalServices: allServices,
+  })
+  const driver = driverFor(device.name ?? '')
+  if (!driver) throw new Error(`Aparelho "${device.name}" não bate com nenhum driver`)
+  track(device, driver)
+  await connect(device.id)
+  return conns[device.id]
+}
+
+export async function connect(id: string): Promise<void> {
+  const l = live.get(id)
+  const c = conns[id]
+  if (!l || !c) throw new Error('Aparelho não pareado nesta sessão — use Adicionar')
+  if (c.state === 'online' && l.char) return
+
+  c.state = 'connecting'
+  c.error = undefined
+  try {
+    const server = await l.device.gatt!.connect()
+    const service = await server.getPrimaryService(c.driver.service)
+    l.char = await service.getCharacteristic(c.driver.writeChar)
+    c.state = 'online'
+    // Some families ignore every command until they get a handshake frame.
+    for (const frame of c.driver.onConnect?.(c.name) ?? []) {
+      await l.queue.push(() => writeRaw(l, frame))
+    }
+  } catch (e) {
+    c.state = 'error'
+    c.error = e instanceof Error ? e.message : String(e)
+    throw e
+  }
+}
+
+export function disconnect(id: string) {
+  const l = live.get(id)
+  if (l?.device.gatt?.connected) l.device.gatt.disconnect()
+  const c = conns[id]
+  if (c) c.state = 'offline'
+}
+
+async function writeRaw(l: Live, frame: Uint8Array) {
+  const char = l.char
+  if (!char) throw new Error('Não conectado')
+  const buf = frame as unknown as BufferSource
+  try {
+    // These controllers advertise write-without-response, which is also the only
+    // mode fast enough for a colour slider.
+    await char.writeValueWithoutResponse(buf)
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'NotSupportedError') {
+      await char.writeValue(buf)
+      return
+    }
+    throw e
+  }
+}
+
+/** Devices the current selection resolves to, skipping ones that are not live. */
+export const targets = () => selection.ids.map((id) => conns[id]).filter(Boolean)
+
+/**
+ * Build a frame per device (drivers differ) and write it to everything selected.
+ * `coalesceKey` marks a stream where only the newest value matters.
+ */
+export async function apply(
+  build: (driver: Driver, name: string) => Uint8Array | undefined,
+  coalesceKey?: string,
+): Promise<void> {
+  await Promise.allSettled(
+    selection.ids.map(async (id) => {
+      const c = conns[id]
+      const l = live.get(id)
+      if (!c || !l) return
+      if (c.state !== 'online') await connect(id)
+      const frame = build(c.driver, c.name)
+      if (!frame) return
+      const op = () => writeRaw(l, frame)
+      return coalesceKey ? l.queue.pushLatest(coalesceKey, op) : l.queue.push(op)
+    }),
+  )
+}

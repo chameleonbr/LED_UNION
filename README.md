@@ -1,47 +1,79 @@
-# Svelte + TS + Vite
+# LED Onion
 
-This template should help get you started developing with Svelte and TypeScript in Vite.
+Controle centralizado de fitas e controladores LED Bluetooth, em um PWA.
 
-## Recommended IDE Setup
+Os apps originais (Magic Lantern, Lotus Lantern, LED+LAMP, BLEDIM) controlam um
+aparelho por vez, cada um fala só com a sua família, e nenhum recebe atualização.
+Aqui dá para selecionar **um, vários, todos ou um grupo** e aplicar cor, brilho,
+efeito ou cena de uma vez só.
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
+## Estado
 
-## Need an official Svelte framework?
+| família | serviço / característica | status |
+|---|---|---|
+| MELK-* (Magic Lantern) | `FFF0` / `FFF3` | ✅ implementado |
+| ELK- / XSL- / CLK- (Lotus Lantern) | `FFF0` / `FFF3` | ✅ implementado |
+| LEDBLE / LEDSTAGE / LEDLIGHT | `FFE0` / `FFE1` | ✅ implementado |
+| LEDDMX / LEDCAR / LEDSMART / LEDSUN / LEDLIKE / LEDPHO | `FFE0` / `FFE1` | 📄 documentado, não implementado |
+| BLEDIM | desconhecido | ❌ ver `docs/protocol/bledim.md` |
 
-Check out [SvelteKit](https://github.com/sveltejs/kit#readme), which is also powered by Vite. Deploy anywhere with its serverless-first approach and adapt to various platforms, with out of the box support for TypeScript, SCSS, and Less, and easily-added support for mdsvex, GraphQL, PostCSS, Tailwind CSS, and more.
+Nada disso foi testado contra hardware real ainda. Os frames vêm da engenharia
+reversa dos apps originais e batem byte a byte com o que está em `docs/protocol/`,
+mas a confirmação no aparelho ainda não aconteceu.
 
-## Technical considerations
+## Rodando no celular
 
-**Why use this over SvelteKit?**
+Web Bluetooth exige contexto seguro. Em desenvolvimento, `localhost` conta — então
+o túnel do adb resolve sem HTTPS nem certificado:
 
-- It brings its own routing solution which might not be preferable for some users.
-- It is first and foremost a framework that just happens to use Vite under the hood, not a Vite app.
-
-This template contains as little as possible to get started with Vite + TypeScript + Svelte, while taking into account the developer experience with regards to HMR and intellisense. It demonstrates capabilities on par with the other `create-vite` templates and is a good starting point for beginners dipping their toes into a Vite + Svelte project.
-
-Should you later need the extended capabilities and extensibility provided by SvelteKit, the template has been structured similarly to SvelteKit so that it is easy to migrate.
-
-**Why `global.d.ts` instead of `compilerOptions.types` inside `jsconfig.json` or `tsconfig.json`?**
-
-Setting `compilerOptions.types` shuts out all other types not explicitly listed in the configuration. Using triple-slash references keeps the default TypeScript setting of accepting type information from the entire workspace, while also adding `svelte` and `vite/client` type information.
-
-**Why include `.vscode/extensions.json`?**
-
-Other templates indirectly recommend extensions via the README, but this file allows VS Code to prompt the user to install the recommended extension upon opening the project.
-
-**Why enable `allowJs` in the TS template?**
-
-While `allowJs: false` would indeed prevent the use of `.js` files in the project, it does not prevent the use of JavaScript syntax in `.svelte` files. In addition, it would force `checkJs: false`, bringing the worst of both worlds: not being able to guarantee the entire codebase is TypeScript, and also having worse typechecking for the existing JavaScript. In addition, there are valid use cases in which a mixed codebase may be relevant.
-
-**Why is HMR not preserving my local component state?**
-
-HMR state preservation comes with a number of gotchas! It has been disabled by default in both `svelte-hmr` and `@sveltejs/vite-plugin-svelte` due to its often surprising behavior. You can read the details [here](https://github.com/rixo/svelte-hmr#svelte-hmr).
-
-If you have state that's important to retain within a component, consider creating an external store which would not be replaced by HMR.
-
-```ts
-// store.ts
-// An extremely simple external store
-import { writable } from 'svelte/store'
-export default writable(0)
+```bash
+npm install
+npm run dev
+adb reverse tcp:5173 tcp:5173
 ```
+
+Abra `http://localhost:5173` no Chrome do Android. Em produção, sirva o `dist/`
+por HTTPS em qualquer domínio.
+
+iOS não suporta Web Bluetooth.
+
+## Comandos
+
+```bash
+npm run dev          # servidor de desenvolvimento
+npm run build        # gera dist/ com service worker e manifest
+npm test             # testes de frame e de fila de escrita
+npm run check        # svelte-check + tsc
+npm run gen:effects  # regenera src/lib/protocol/effects.ts a partir de docs/protocol/*.tsv
+```
+
+## Estrutura
+
+```
+src/lib/protocol/    builders de frame puros, um módulo por família
+src/lib/queue.ts     fila serial por aparelho, com coalescing
+src/lib/ble.svelte.ts  conexões GATT e aplicação em grupo
+src/lib/ui/          telas
+docs/protocol/       specs de wire + tabelas de efeito (.tsv)
+tools/gen-effects.py gerador das tabelas
+```
+
+Adicionar uma família nova = um arquivo em `src/lib/protocol/` que implementa
+`Driver`, mais uma linha no registry. Os builders são funções puras, então cada um
+ganha um teste que compara os bytes com o que está documentado.
+
+## Protocolo
+
+Ver `docs/protocol/`. Resumo do que é fácil errar:
+
+- Brilho, velocidade, branco e CCT são **0–100**. RGB é 0–255.
+- A família `FFE0` **exige handshake** (`2A 02 …`) logo após conectar, senão ignora
+  todo comando.
+- Nenhuma família usa checksum. Todo frame tem 9 bytes.
+- Os controladores engasgam com escritas concorrentes; há uma fila por aparelho com
+  gap mínimo (50 ms para `FFE0`, 5 ms para `FFF0`).
+
+## Licença
+
+MIT. Interoperabilidade com protocolo próprio — o repositório contém apenas fatos de
+protocolo derivados de observação, nenhum código ou asset dos apps originais.
