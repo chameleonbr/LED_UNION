@@ -81,6 +81,30 @@ ordem RGB     7E FF 08 <order> FF FF FF FF EF
 
 Brilho e velocidade são **0..100**, não 0..255.
 
+### Canais (LEDBLE-02) — duas saídas independentes
+
+O ramo `LEDBLE-02` usa o **byte 7** como seletor de saída. Valores vindos do seletor de
+rádio em `MainActivity_BLE` (`rbBLE02RgbALL` / `rbBLE02RgbLED1` / `rbBLE02RgbLED2`):
+
+| valor | alvo |
+|---|---|
+| `0` | todas as saídas |
+| `1` | LED1 |
+| `2` | LED2 |
+
+```
+rgb        7E FF 05 03 <r> <g> <b> <ch> EF     NetConnectBle:725
+power      7E FF 04 <1|0> 00 FF FF <ch> EF     NetConnectBle:394
+brilho     7E FF 01 <bri> 00 FF FF <ch> EF     NetConnectBle:2206
+velocidade 7E FF 02 <spd> 00 FF FF <ch> EF     NetConnectBle:2217
+efeito     7E <flag> 0E <id> FF FF FF <ch> EF  NetConnectBle:1852
+```
+
+São **duas** saídas, não três. Nos outros ramos (`LEDBLE-00`, `-01`) o byte 7 é fixo
+(`FF` em cor, `00` em power) e não há seleção de saída documentada — então um
+controlador que separe luzes fisicamente mas anuncie `LEDBLE-00` precisa de
+confirmação no aparelho.
+
 ### Variantes de layout
 
 - **LEDBLE-03** desloca tudo: `cmd` vai pro byte 1, o filler `FF` some.

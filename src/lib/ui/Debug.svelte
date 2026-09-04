@@ -85,6 +85,17 @@
     ['consultar', '7E 00 01 FA 00 00 00 00 EF'],
   ]
 
+  /**
+   * LEDBLE-02 puts the output selector in byte 7: 0 = all, 1 = LED1, 2 = LED2.
+   * If only part of the wiring reacts, the controller really is multi-output.
+   */
+  const channelCandidates: Array<[string, string]> = [
+    ['CH0 · todos vermelho', '7E FF 05 03 FF 00 00 00 EF'],
+    ['CH1 · LED1 verde', '7E FF 05 03 00 FF 00 01 EF'],
+    ['CH2 · LED2 azul', '7E FF 05 03 00 00 FF 02 EF'],
+    ['CH3 · LED3? branco', '7E FF 05 03 FF FF FF 03 EF'],
+  ]
+
   /** Static red is unmistakable, so it identifies the effect frame at a glance. */
   const effectCandidates: Array<[string, string]> = [
     ['F · efeito app', '7E 05 03 80 03 FF FF 00 EF'],
@@ -163,6 +174,9 @@
     </button>
     <button onclick={() => sweep(effectCandidates, 'efeito')} disabled={!deviceId || busy}>
       Varrer efeito → vermelho estático (4 × 1,5 s)
+    </button>
+    <button onclick={() => sweep(channelCandidates, 'canais')} disabled={!deviceId || busy}>
+      Varrer canais — cor diferente por saída (4 × 1,5 s)
     </button>
     <div class="row wrap" style="gap:6px">
       {#each presets as [label, frame]}
