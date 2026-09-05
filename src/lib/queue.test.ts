@@ -24,7 +24,9 @@ test('gap is enforced between writes', async () => {
   const t0 = Date.now()
   await q.push(async () => {})
   await q.push(async () => {})
-  assert.ok(Date.now() - t0 >= 40, 'second write ran too soon')
+  // setTimeout may fire a hair early and Date.now() rounds down, so a strict >= 40
+  // fails on a loaded runner even when the gap was honoured.
+  assert.ok(Date.now() - t0 >= 38, 'second write ran too soon')
 })
 
 test('pushLatest keeps the final value and drops superseded ones', async () => {
