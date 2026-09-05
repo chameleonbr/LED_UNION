@@ -267,7 +267,7 @@ export const ffe0: Driver = {
       // 0x03 selects a built-in mode; 0x13 is the user's DIY patterns. Feeding the
       // built-in table's ids to 0x13 was a bug.
       case 'dmxs':
-        return f(0x7b, 0x03, id, F, F, F, F, F, 0xbf)
+        return f(0x7b, 0x03, id, F, F, F, F, ch ?? F, 0xbf)
       case 'dmx':
         return f(0x7b, F, 0x03, id, F, F, F, F, 0xbf)
       case 'smart':
@@ -279,7 +279,11 @@ export const ffe0: Driver = {
       case 'pho':
         return f(0x72, 0x08, id, F, F, ...PHO_GROUP, 0x2f)
       default:
-        return f(0x7e, 0x00, 0x0e, id, F, F, F, ch ?? F, 0xef)
+        // setRgbMode, not setMode. 7E 00 0E is the four scene shortcuts in the app's
+        // colour tab, so feeding it the mode table's ids picked the wrong effect or
+        // none at all. LEDBLE-03 shifts the id one byte left.
+        if (/LEDBLE-03/i.test(name)) return f(0x7e, 0x03, id, 0x00, F, F, F, F, 0xef)
+        return f(0x7e, F, 0x03, id, 0x03, F, F, ch ?? F, 0xef)
     }
   },
 

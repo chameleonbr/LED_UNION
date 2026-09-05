@@ -59,24 +59,24 @@
   // Every control writes the look after sending, so the card reflects the last command
   // even though the device never reports anything back.
   async function power(on: boolean) {
-    await applyTo([dkey], (d, n, c) => d.power(on, n, c))
+    await applyTo([dkey], (d, n, c, v) => d.power(on, n, c, v))
     setLook(dkey, { power: on })
   }
 
   async function pickColor(hex: string) {
     const { r, g, b } = rgb(hex)
-    await applyTo([dkey], (d, n, c) => d.rgb(r, g, b, n, c), 'rgb')
+    await applyTo([dkey], (d, n, c, v) => d.rgb(r, g, b, n, c, v), 'rgb')
     // A static colour replaces whatever effect was playing.
     setLook(dkey, { colorHex: hex, effect: undefined, customEffectId: undefined })
   }
 
   async function setBrightness(v: number) {
-    await applyTo([dkey], (d, n, c) => d.brightness(v, n, c), 'brightness')
+    await applyTo([dkey], (d, n, c, vr) => d.brightness(v, n, c, vr), 'brightness')
     setLook(dkey, { brightness: v })
   }
 
   async function setSpeed(v: number) {
-    await applyTo([dkey], (d, n, c) => d.speed(v, n, c), 'speed')
+    await applyTo([dkey], (d, n, c, vr) => d.speed(v, n, c, vr), 'speed')
     setLook(dkey, { speed: v })
   }
 
@@ -88,16 +88,16 @@
    */
   async function setWhite(v: number) {
     if (hasRealWhite) {
-      await applyTo([dkey], (d, n) => d.white?.(v, n), 'white')
+      await applyTo([dkey], (d, n, _c, vr) => d.white?.(v, n, vr), 'white')
       return
     }
     const k = Math.round((v * 255) / 100)
-    await applyTo([dkey], (d, n, c) => d.rgb(k, k, k, n, c), 'rgb')
+    await applyTo([dkey], (d, n, c, v) => d.rgb(k, k, k, n, c, v), 'rgb')
     const hex = `#${[k, k, k].map((x) => x.toString(16).padStart(2, '0')).join('')}`
     setLook(dkey, { colorHex: hex, effect: undefined, customEffectId: undefined })
   }
   const setCct = (v: number) =>
-    applyTo([dkey], (d, n) => d.cct?.(v, 100 - v, n), 'cct')
+    applyTo([dkey], (d, n, _c, vr) => d.cct?.(v, 100 - v, n, vr), 'cct')
 
   async function chooseEffect(e: Event) {
     const v = (e.currentTarget as HTMLSelectElement).value
@@ -110,7 +110,7 @@
     if (kind === 'b') {
       const fx = builtIn[Number(rest)]
       if (!fx) return
-      await applyTo([dkey], (d, n, c) => d.effect(fx, n, c))
+      await applyTo([dkey], (d, n, c, v) => d.effect(fx, n, c, v))
       setLook(dkey, { effect: fx, customEffectId: undefined })
     } else {
       const fx = store.customEffects.find((x) => x.id === rest)
@@ -122,14 +122,15 @@
   async function runCustom(fx: CustomEffect) {
     // sendFrames uses the non-coalescing queue: dropping a colour mid-upload would
     // leave the controller with a truncated sequence.
-    await sendFrames(dkey, (d, n, c) =>
+    await sendFrames(dkey, (d, n, c, v) =>
       d.customEffect?.(
         { colors: fx.colors.map(rgb), fade: fx.fade },
         n,
         c,
+        v,
       ) ?? [],
     )
-    await applyTo([dkey], (d, n, c) => d.speed(fx.speed, n, c))
+    await applyTo([dkey], (d, n, c, v) => d.speed(fx.speed, n, c, v))
     setLook(dkey, { customEffectId: fx.id, effect: undefined })
   }
 
@@ -361,7 +362,7 @@
               <button class="grow" class:primary={source === src}
                 onclick={() => {
                   source = src
-                  applyTo([dkey], (d, n, c) => d.soundMode?.(soundModeId, n, src, c))
+                  applyTo([dkey], (d, n, c, v) => d.soundMode?.(soundModeId, n, src, c, v))
                 }}>{t(`sound.${src}`)}</button>
             {/each}
           </div>
@@ -369,7 +370,7 @@
             <span>{t('sound.mode')} — {soundModeId}</span>
             <input type="range" min="0" max="15" bind:value={soundModeId}
               onchange={() =>
-                applyTo([dkey], (d, n, c) => d.soundMode?.(soundModeId, n, source, c))} />
+                applyTo([dkey], (d, n, c, v) => d.soundMode?.(soundModeId, n, source, c, v))} />
           </label>
         {/if}
         {#if conn.driver.soundSensitivity}
@@ -377,7 +378,7 @@
             <span>{t('sound.sensitivity')} — {sensitivity}%</span>
             <input type="range" min="0" max="100" bind:value={sensitivity}
               oninput={() =>
-                applyTo([dkey], (d, n) => d.soundSensitivity?.(sensitivity, n), 'sens')} />
+                applyTo([dkey], (d, n, _c, v) => d.soundSensitivity?.(sensitivity, n, v), 'sens')} />
           </label>
         {/if}
         <div class="small muted">{t('sound.note')}</div>

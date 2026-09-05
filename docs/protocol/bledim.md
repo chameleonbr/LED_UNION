@@ -93,6 +93,35 @@ Total frame = 72 + 7 = **79** (`SCENE_PACKET_SIZE`).
 Byte 14 equal to `255` means "no effect" — a static colour scene. The app's own UI
 labels these `M1..M13` from the index; it has no real names for them.
 
+### `0x81` lights, `0x82` persists
+
+`0x81` (`selectColor`) is the **live preview** the app sends while the colour wheel is
+being dragged. The controller shows the colour and forgets it: after a power cycle it
+comes back on the scene it has stored, not on the last `0x81`.
+
+What persists is the scene. The app's Save button packs a `ScenePara` and sends `0x82`,
+and `ScenePara.FlushStaticBuf(r, g, b, w)` is the shape it uses for a plain colour:
+
+| offset | value |
+|---|---|
+| 0 | `0` — no fade |
+| 1 | `192` — speed, hard-coded |
+| 2 | `255` — brightness, hard-coded |
+| 3 | `1` — one colour |
+| 4..15 | `0`, byte 14 included: no effect |
+| 16..19 | `[W, R, G, B]` |
+
+Brightness is hard-coded to `255` because the app's colour screen has no brightness
+slider — brightness is baked into the RGB value instead.
+
+The controller keeps **15 scene slots**. `0x87` reads them back (`dealRcvSceneInfo`:
+byte 5 power-on state, 6 scene count, 7 channel count, 8 current slot, then 15 × 79
+bytes of scene). The app seeds its own slot 0 **white** — `MyData` calls
+`FlushStaticBuf(255, 255, 255, 0)` — which is why a controller that has only ever been
+sent `0x81` powers up white.
+
+There is **no separate "save colour" command**: writing the scene is the save.
+
 Offset 4 is the **scene slot**, and the app zeroes it on every buffer it builds. Do not
 confuse it with the `0x88` command's own scene field, which does use 255.
 

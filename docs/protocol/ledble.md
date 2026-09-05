@@ -80,8 +80,9 @@ warm white    7E FF 05 01 <w 0..100> FF FF FF EF
 cct, 2 ch     7E FF 05 02 <warm> <cool> FF FF EF
 brightness    7E FF 01 <0..100> 00 FF FF FF EF
 speed         7E FF 02 <0..100> 00 FF FF FF EF
-effect        7E 00 0E <modeId> FF FF FF FF EF
-mic mode      7E 02 0E <mode> FF FF FF FF EF
+effect        7E FF 03 <modeId> 03 FF FF FF EF   NetConnectBle:830
+mic mode      7E 00 0E <mode> FF FF FF FF EF
+music mode    7E 02 0E <mode> FF FF FF FF EF
 mic sens.     7E FF 07 <sens> FF FF FF FF EF
 rgb order     7E FF 08 <order> FF FF FF FF EF
 ```
@@ -105,7 +106,8 @@ rgb         7E FF 05 03 <r> <g> <b> <ch> EF     NetConnectBle:725
 power       7E FF 04 <1|0> 00 FF FF <ch> EF     NetConnectBle:394
 brightness  7E FF 01 <bri> 00 FF FF <ch> EF     NetConnectBle:2206
 speed       7E FF 02 <spd> 00 FF FF <ch> EF     NetConnectBle:2217
-effect      7E <flag> 0E <id> FF FF FF <ch> EF  NetConnectBle:1852
+effect      7E FF 03 <id> 03 FF FF <ch> EF      NetConnectBle:861
+sound mode  7E <0|2> 0E <id> FF FF FF <ch> EF  NetConnectBle:1850
 ```
 
 **Observed on hardware** (LEDBLE-00-9B67, a car controller driving a strip plus door

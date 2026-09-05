@@ -51,7 +51,7 @@ test('ffe0: frames match docs/protocol/ledble.md', () => {
   assert.equal(hex(ffe0.speed(1, 'LEDBLE-001')), '7e ff 02 01 00 ff ff ff ef')
   assert.equal(
     hex(ffe0.effect({ id: 135, name: 'Tricolor jump' }, 'LEDBLE-001')),
-    '7e 00 0e 87 ff ff ff ff ef',
+    '7e ff 03 87 03 ff ff ff ef',
   )
   // LEDSTAGE/LEDLIGHT take a different power frame.
   assert.equal(hex(ffe0.power(true, 'LEDSTAGE-1')), '7e ff 04 01 ff ff ff ff ef')
@@ -272,9 +272,16 @@ test('bledim commands match docs/protocol/bledim.md', async () => {
 
   assert.deepEqual(body(bledim.power(true, 'BLEDIM')), [1])
   assert.deepEqual(body(bledim.power(false, 'BLEDIM')), [0])
-  // Colour payload is W, R, G, B — white first.
-  assert.deepEqual(body(bledim.rgb(10, 20, 30, 'BLEDIM')), [0, 10, 20, 30])
-  assert.deepEqual(body(bledim.white!(100, 'BLEDIM')), [255, 0, 0, 0])
+  // A static colour is a one-colour scene (0x82), not the live 0x81: only the scene
+  // survives a power cycle, which is what the app's Save button writes.
+  const col = bledim.rgb(10, 20, 30, 'BLEDIM')
+  assert.equal(col[3], 0x82, 'immediate scene')
+  assert.equal(col.length, 6 + 72 + 1)
+  // FlushStaticBuf: speed 192, brightness 255, one colour, no effect, W R G B at 16.
+  assert.deepEqual(body(col).slice(0, 4), [0, 192, 255, 1])
+  assert.equal(body(col)[14], 0, 'no built-in effect')
+  assert.deepEqual(body(col).slice(16, 20), [0, 10, 20, 30])
+  assert.deepEqual(body(bledim.white!(100, 'BLEDIM')).slice(16, 20), [255, 0, 0, 0])
 
   // Percent in, 0..255 on the wire, and speed/brightness share one command. Use a name
   // with no colour on it, so brightness takes the 0x88 path rather than rescaling.
@@ -652,8 +659,8 @@ test('bledim brightness scales a static colour, and drives 0x88 for effects', as
   // brightness slider at all, it bakes brightness into the RGB value.
   bledim.rgb(200, 100, 50, N)
   const half = bledim.brightness(50, N)
-  assert.equal(half[3], 0x81, 'colour command, not 0x88')
-  const [w, r, g, b] = body(half)
+  assert.equal(half[3], 0x82, 'scene command, not 0x88')
+  const [w, r, g, b] = body(half).slice(16, 20)
   assert.equal(w, 0)
   // 50% maps to 127/255, so each channel comes back at roughly half.
   assert.ok(Math.abs(r - 100) <= 2, `r=${r}`)
@@ -662,7 +669,7 @@ test('bledim brightness scales a static colour, and drives 0x88 for effects', as
 
   // Full brightness returns the original colour rather than drifting.
   const full = body(bledim.brightness(100, N))
-  assert.deepEqual(full, [0, 200, 100, 50])
+  assert.deepEqual(full.slice(16, 20), [0, 200, 100, 50])
 
   // An effect replaces the static colour, so brightness goes back to the 0x88 path.
   bledim.effect({ id: 3, name: 'M4' }, N)

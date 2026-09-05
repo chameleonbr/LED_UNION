@@ -92,6 +92,35 @@ Quadro total = 72 + 7 = **79** (`SCENE_PACKET_SIZE`).
 Byte 14 igual a `255` significa "sem efeito" — cena de cor estática. A UI rotula
 `M1..M13` a partir do índice, e o app não tem nomes próprios para eles.
 
+### `0x81` acende, `0x82` grava
+
+`0x81` (`selectColor`) é o **preview ao vivo** que o app manda enquanto a roda de cor
+está sendo arrastada. A controladora mostra a cor e esquece: depois de um ciclo de
+energia ela volta na cena gravada, não no último `0x81`.
+
+O que persiste é a cena. O botão Salvar do app empacota um `ScenePara` e manda `0x82`,
+e `ScenePara.FlushStaticBuf(r, g, b, w)` é o formato usado para uma cor simples:
+
+| offset | valor |
+|---|---|
+| 0 | `0` — sem fade |
+| 1 | `192` — velocidade, fixa |
+| 2 | `255` — brilho, fixo |
+| 3 | `1` — uma cor |
+| 4..15 | `0`, incluindo o byte 14: sem efeito |
+| 16..19 | `[W, R, G, B]` |
+
+O brilho é fixo em `255` porque a tela de cor do app não tem slider de brilho — o brilho
+é embutido no próprio valor RGB.
+
+A controladora guarda **15 slots de cena**. `0x87` os lê de volta (`dealRcvSceneInfo`:
+byte 5 estado de power-on, 6 quantidade de cenas, 7 quantidade de canais, 8 slot atual,
+depois 15 × 79 bytes de cena). O app semeia o próprio slot 0 como **branco** — `MyData`
+chama `FlushStaticBuf(255, 255, 255, 0)` — que é o motivo de uma controladora que só
+recebeu `0x81` ligar branca.
+
+**Não existe comando separado de "salvar cor"**: gravar a cena é o salvar.
+
 ## Handshake / binding
 
 `Encrypt.java` não faz criptografia: é uma tabela ASCII de 240 bytes e três funções

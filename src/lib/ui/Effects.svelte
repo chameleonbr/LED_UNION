@@ -59,19 +59,19 @@
 
   async function allColor(hex: string) {
     const { r, g, b } = rgb(hex)
-    await applyTo(allKeys, (d, n, c) => d.rgb(r, g, b, n, c), 'rgb')
+    await applyTo(allKeys, (d, n, c, v) => d.rgb(r, g, b, n, c, v), 'rgb')
     for (const k of allKeys) {
       setLook(k, { colorHex: hex, effect: undefined, customEffectId: undefined })
     }
   }
 
   async function allBrightness(v: number) {
-    await applyTo(allKeys, (d, n, c) => d.brightness(v, n, c), 'brightness')
+    await applyTo(allKeys, (d, n, c, vr) => d.brightness(v, n, c, vr), 'brightness')
     for (const k of allKeys) setLook(k, { brightness: v })
   }
 
   async function allPower(on: boolean) {
-    await applyTo(allKeys, (d, n, c) => d.power(on, n, c))
+    await applyTo(allKeys, (d, n, c, v) => d.power(on, n, c, v))
     for (const k of allKeys) setLook(k, { power: on })
   }
 

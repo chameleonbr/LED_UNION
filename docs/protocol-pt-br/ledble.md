@@ -73,8 +73,9 @@ warm white    7E FF 05 01 <w 0..100> FF FF FF EF
 cct 2ch       7E FF 05 02 <warm> <cool> FF FF EF
 brilho        7E FF 01 <0..100> 00 FF FF FF EF
 velocidade    7E FF 02 <0..100> 00 FF FF FF EF
-efeito        7E 00 0E <modeId> FF FF FF FF EF
-modo mic      7E 02 0E <mode> FF FF FF FF EF
+efeito        7E FF 03 <modeId> 03 FF FF FF EF   NetConnectBle:830
+modo mic      7E 00 0E <mode> FF FF FF FF EF
+modo música   7E 02 0E <mode> FF FF FF FF EF
 sensib. mic   7E FF 07 <sens> FF FF FF FF EF
 ordem RGB     7E FF 08 <order> FF FF FF FF EF
 ```
@@ -97,7 +98,8 @@ rgb        7E FF 05 03 <r> <g> <b> <ch> EF     NetConnectBle:725
 power      7E FF 04 <1|0> 00 FF FF <ch> EF     NetConnectBle:394
 brilho     7E FF 01 <bri> 00 FF FF <ch> EF     NetConnectBle:2206
 velocidade 7E FF 02 <spd> 00 FF FF <ch> EF     NetConnectBle:2217
-efeito     7E <flag> 0E <id> FF FF FF <ch> EF  NetConnectBle:1852
+efeito     7E FF 03 <id> 03 FF FF <ch> EF      NetConnectBle:861
+modo som   7E <0|2> 0E <id> FF FF FF <ch> EF  NetConnectBle:1850
 ```
 
 **Observado em hardware** (LEDBLE-00-9B67, controlador de carro com fita + maçaneta +

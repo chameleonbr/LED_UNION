@@ -145,6 +145,26 @@ function sceneFrame(
   return frame(CMD.IMMEDIATE_SCENE, p)
 }
 
+/**
+ * One colour, no effect — ScenePara.FlushStaticBuf.
+ *
+ * Speed 192 and brightness 255 are what the app hard-codes for a static colour; its
+ * colour screen has no brightness slider, so brightness is baked into the RGB value
+ * instead. Slot 0, the same slot the app's own colour buttons write.
+ */
+function staticScene(r: number, g: number, b: number, w: number): Uint8Array {
+  const p = new Array(SCENE_PARA_SIZE).fill(0)
+  p[1] = 192
+  p[2] = 255
+  p[3] = 1 // one colour entry
+  // Colour entries start at 16 and are [W, R, G, B].
+  p[16] = byte(w)
+  p[17] = byte(r)
+  p[18] = byte(g)
+  p[19] = byte(b)
+  return frame(CMD.IMMEDIATE_SCENE, p)
+}
+
 export const bledim: Driver = {
   id: 'bledim',
   label: 'BLEDIM',
@@ -180,14 +200,26 @@ export const bledim: Driver = {
 
   power: (on) => frame(CMD.ONOFF, [on ? 1 : 0]),
 
-  // Payload order is W, R, G, B — white first.
+  /**
+   * A static colour is sent as a one-colour scene, not as 0x81.
+   *
+   * 0x81 (selectColor) is the app's live preview while the colour wheel is dragged —
+   * the controller lights it but does not keep it. What survives a power cycle is the
+   * scene, which is why the app's Save button packs a ScenePara and sends 0x82. Using
+   * 0x81 alone left the controller booting back to its stored slot, and the app seeds
+   * slot 0 white (MyData: FlushStaticBuf(255, 255, 255, 0)).
+   *
+   * The shape is ScenePara.FlushStaticBuf: one colour, no effect, speed 192.
+   */
   rgb(r, g, b, name) {
     const c = { r: byte(r), g: byte(g), b: byte(b) }
     stateFor(name).color = c
-    return frame(CMD.SELECT_COLOR, [0, c.r, c.g, c.b])
+    return staticScene(c.r, c.g, c.b, 0)
   },
 
-  white: (v) => frame(CMD.SELECT_COLOR, [from100(v), 0, 0, 0]),
+  // On RGB-only wiring there is no white channel, so a white-only scene reads as off.
+  // The card sends r = g = b there instead; this is for the wirings that do have one.
+  white: (v) => staticScene(0, 0, 0, from100(v)),
 
   /**
    * The original app has no brightness slider on its colour screen: brightness there is
@@ -199,12 +231,12 @@ export const bledim: Driver = {
     s.brightness = from100(v)
     if (!s.color) return speedBrightness(name)
     const k = s.brightness / 255
-    return frame(CMD.SELECT_COLOR, [
-      0,
+    return staticScene(
       byte(s.color.r * k),
       byte(s.color.g * k),
       byte(s.color.b * k),
-    ])
+      0,
+    )
   },
 
   speed(v, name) {
