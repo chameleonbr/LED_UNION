@@ -25,3 +25,6 @@ dist-ssr
 
 # APKs de origem — não redistribuir (ver docs/protocol/ para os fatos extraídos)
 original_apps/
+
+# Estado de runtime do Claude Code
+.claude/scheduled_tasks.lock
