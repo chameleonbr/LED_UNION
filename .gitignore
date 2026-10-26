@@ -28,3 +28,6 @@ original_apps/
 
 # Estado de runtime do Claude Code
 .claude/scheduled_tasks.lock
+
+# Python bytecode
+__pycache__/

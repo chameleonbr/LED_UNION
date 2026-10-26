@@ -715,3 +715,21 @@ test('LEDCAR-01 drives two outputs by switching envelope, not by channel', async
   assert.equal(isAddressable(N, 'dmx'), true)
   assert.equal(isAddressable(N, 'ble'), false)
 })
+
+test('bledim colour keeps the brightness already set, and white is remembered', async () => {
+  const { bledim } = await import('./bledim.ts')
+  const body = (f: Uint8Array) => [...f].slice(6, -1)
+  // Brightness first, colour second: the colour must come out dimmed, not at full.
+  const A = 'BLEDIM-dim-then-colour'
+  bledim.brightness(40, A)
+  const k = Math.round((40 * 255) / 100) / 255
+  assert.deepEqual(
+    body(bledim.rgb(200, 100, 0, A)).slice(16, 20),
+    [0, Math.round(200 * k), Math.round(100 * k), 0],
+  )
+  // Red, then real white, then brightness: the old red must not come back.
+  const B = 'BLEDIM-white-then-dim'
+  bledim.rgb(255, 0, 0, B)
+  bledim.white!(100, B)
+  assert.deepEqual(body(bledim.brightness(50, B)).slice(16, 20), [128, 0, 0, 0])
+})

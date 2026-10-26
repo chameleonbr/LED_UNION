@@ -38,6 +38,10 @@ export type Look = {
   /** '#rrggbb' — 0..255 per channel, unlike the 0..100 the drivers take elsewhere. */
   colorHex?: string
   brightness?: number
+  /** Real W channel, 0..100. A static mode like colorHex and cct: one replaces the others. */
+  white?: number
+  /** Warm share of a CCT mix, 0..100 (cool is the rest). */
+  cct?: number
   speed?: number
   effect?: Effect
   /** Id of a CustomEffect, when a user-built sequence is what is playing. */
@@ -117,32 +121,53 @@ export function migrate(raw: unknown): Persisted {
   if (!Array.isArray(merged.colors) || merged.colors.length === 0) {
     merged.colors = seedColors()
   }
-  if (!merged.looks || typeof merged.looks !== 'object') merged.looks = {}
-  if (!merged.labels || typeof merged.labels !== 'object') merged.labels = {}
-  if (!Array.isArray(merged.customEffects)) merged.customEffects = []
+  // Each field is repaired on its own: one bad field must not cost the user the rest.
+  const isRecord = (v: unknown) => !!v && typeof v === 'object' && !Array.isArray(v)
+  const list = (v: unknown) => (Array.isArray(v) ? v : [])
+  if (!isRecord(merged.looks)) merged.looks = {}
+  if (!isRecord(merged.labels)) merged.labels = {}
+  merged.customEffects = list(merged.customEffects).filter(
+    (e: any) => isRecord(e) && typeof e.id === 'string' && Array.isArray(e.colors),
+  )
+  merged.devices = list(merged.devices).filter(
+    (d: any) => isRecord(d) && typeof d.id === 'string',
+  )
+  merged.groups = list(merged.groups).filter(
+    (g: any) => isRecord(g) && Array.isArray(g.deviceIds),
+  )
 
   // Outputs used to be declared by hand and stored per device. They are derived from
   // the model now — the vendor apps know a LEDCAR-01 has two without asking — so the
   // stored list goes, but the names the owner gave them are carried across in order.
-  for (const d of (merged.devices ?? []) as Array<Record<string, any>>) {
+  // Old keys were `id#ch`, new ones `id#index`, and the two overlap (ch 1 vs index 1),
+  // so every key is moved from a snapshot rather than in place.
+  const moved = new Map<string, string>()
+  for (const d of merged.devices as Array<Record<string, any>>) {
     const legacy = d.outputs as Array<{ ch: number; label: string }> | undefined
     if (legacy?.length) {
       legacy.forEach((o, i) => {
         const key = `${d.id}#${i}`
         if (o.label && !merged.labels[key]) merged.labels[key] = o.label
-        const oldLook = merged.looks[`${d.id}#${o.ch}`]
-        if (oldLook && !merged.looks[key]) merged.looks[key] = oldLook
+        moved.set(`${d.id}#${o.ch}`, key)
       })
       delete d.outputs
     }
   }
+  const oldLooks = { ...merged.looks }
+  for (const from of moved.keys()) delete merged.looks[from]
+  for (const [from, to] of moved) if (oldLooks[from]) merged.looks[to] = oldLooks[from]
+  const move = (key: string) => moved.get(key) ?? key
+  for (const g of merged.groups) g.deviceIds = g.deviceIds.map(move)
 
   // Scenes used to hold a single colour/effect with no notion of which device it was
   // for. There is no faithful way to map that onto per-device entries, so the old ones
   // are dropped rather than silently applied to the wrong lights.
-  merged.scenes = (merged.scenes ?? []).filter(
-    (s: any) => s && Array.isArray(s.entries),
+  merged.scenes = list(merged.scenes).filter(
+    (s: any) => isRecord(s) && Array.isArray(s.entries),
   ) as Scene[]
+  for (const s of merged.scenes) {
+    s.entries = s.entries.map((e) => ({ ...e, key: move(e.key) }))
+  }
 
   return merged
 }

@@ -24,6 +24,7 @@
   }
 
   onMount(() => { restore() })
+  $effect(() => { document.documentElement.lang = locale() })
 </script>
 
 <header>

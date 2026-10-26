@@ -42,6 +42,12 @@ export type Driver = {
   writeChar: string
   /** Minimum gap between writes to one device, per the original app's throttle. */
   minGapMs: number
+  /**
+   * The builders remember state between calls and key it by their `name` argument.
+   * Callers then pass a per-device key there, since every unit of the family
+   * advertises the same name.
+   */
+  keysStateByName?: boolean
 
   matches(name: string): boolean
   caps(name: string, variant?: string): Caps

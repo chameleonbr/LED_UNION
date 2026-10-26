@@ -1,5 +1,6 @@
 <script lang="ts">
   import { conns, applyTo, displayName } from '../ble.svelte.ts'
+  import type { Effect } from '../protocol/index.ts'
   import { epKey } from '../endpoint.ts'
   import { store, addScene, setLook, labelOf } from '../store.svelte.ts'
   import { t } from '../i18n.svelte.ts'
@@ -47,35 +48,72 @@
     picked = {}
   }
 
-  // --- the Everything card ------------------------------------------------------
-  // Colour and brightness only. Effect ids are per family — 42 is one effect on
-  // LEDDMX and a different one on MELK — so broadcasting one would be arbitrary.
+  // --- the Everything card and one card per group ---------------------------------
+  // Colour, brightness and power always. Effect ids are per family — 42 is one effect
+  // on LEDDMX and a different one on MELK — so effects are offered only when every
+  // member shares the same table.
   const allKeys = $derived(logicals.map((l) => l.key))
+
+  type Target = { id: string; name: string; hint?: string; keys: string[]; effects: Effect[] }
+
+  function sharedEffects(keys: string[]): Effect[] {
+    const members = logicals.filter((l) => keys.includes(l.key))
+    const tables = members.map((l) => l.conn.driver.effects(l.conn.name, l.variant))
+    const sig = (fx: Effect[]) => JSON.stringify(fx.map((e) => [e.id, e.group]))
+    const same =
+      members.length > 0 &&
+      members.every((l) => l.conn.driver.id === members[0].conn.driver.id) &&
+      tables.every((fx) => sig(fx) === sig(tables[0]))
+    return same ? tables[0] : []
+  }
+
+  // A group saved before a device gained outputs holds its bare id: it means all of them.
+  const expand = (k: string) =>
+    allKeys.includes(k) ? [k] : allKeys.filter((x) => x.startsWith(`${k}#`))
+
+  const targets = $derived<Target[]>([
+    ...store.groups
+      .map((g) => ({ id: g.id, name: g.name, keys: [...new Set(g.deviceIds.flatMap(expand))] }))
+      .filter((g) => g.keys.length > 0)
+      .map((g) => ({ ...g, effects: sharedEffects(g.keys) })),
+    {
+      id: '',
+      name: t('effects.everything'),
+      hint: t('effects.everythingHint'),
+      keys: allKeys,
+      effects: [],
+    },
+  ])
 
   function rgb(hex: string) {
     const n = parseInt(hex.slice(1), 16)
     return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }
   }
 
-  async function allColor(hex: string) {
+  async function allColor(keys: string[], hex: string) {
     const { r, g, b } = rgb(hex)
-    await applyTo(allKeys, (d, n, c, v) => d.rgb(r, g, b, n, c, v), 'rgb')
-    for (const k of allKeys) {
-      setLook(k, { colorHex: hex, effect: undefined, customEffectId: undefined })
+    await applyTo(keys, (d, n, c, v) => d.rgb(r, g, b, n, c, v), 'rgb')
+    for (const k of keys) {
+      setLook(k, { colorHex: hex, white: undefined, cct: undefined, effect: undefined, customEffectId: undefined })
     }
   }
 
-  async function allBrightness(v: number) {
-    await applyTo(allKeys, (d, n, c, vr) => d.brightness(v, n, c, vr), 'brightness')
-    for (const k of allKeys) setLook(k, { brightness: v })
+  async function allBrightness(keys: string[], v: number) {
+    await applyTo(keys, (d, n, c, vr) => d.brightness(v, n, c, vr), 'brightness')
+    for (const k of keys) setLook(k, { brightness: v })
   }
 
-  async function allPower(on: boolean) {
-    await applyTo(allKeys, (d, n, c, v) => d.power(on, n, c, v))
-    for (const k of allKeys) setLook(k, { power: on })
+  async function allPower(keys: string[], on: boolean) {
+    await applyTo(keys, (d, n, c, v) => d.power(on, n, c, v))
+    for (const k of keys) setLook(k, { power: on })
   }
 
-  let allBright = $state(100)
+  async function allEffect(keys: string[], e: Effect) {
+    await applyTo(keys, (d, n, c, v) => d.effect(e, n, c, v))
+    for (const k of keys) setLook(k, { effect: e, customEffectId: undefined })
+  }
+
+  let bright = $state<Record<string, number>>({})
 </script>
 
 <div class="col">
@@ -101,23 +139,43 @@
 
 
 
-    <div class="card col" style="border-style:dashed">
-      <strong>{t('effects.everything')}</strong>
-      <div class="small muted">{t('effects.everythingHint')}</div>
-      <div class="row">
-        <button class="primary grow" onclick={() => allPower(true)}>{t('effects.on')}</button>
-        <button class="grow" onclick={() => allPower(false)}>{t('effects.off')}</button>
+    {#each targets as tg (tg.id)}
+      <div class="card col" style="border-style:dashed">
+        <strong>{tg.name}</strong>
+        {#if tg.hint}<div class="small muted">{tg.hint}</div>{/if}
+        <div class="row">
+          <button class="primary grow" onclick={() => allPower(tg.keys, true)}>{t('effects.on')}</button>
+          <button class="grow" onclick={() => allPower(tg.keys, false)}>{t('effects.off')}</button>
+        </div>
+        <label class="field">
+          <span>{t('effects.color')}</span>
+          <ColorSelect onpick={(hex) => allColor(tg.keys, hex)} />
+        </label>
+        <label class="field">
+          <span>{t('effects.brightness')} — {bright[tg.id] ?? 100}%</span>
+          <input type="range" min="0" max="100" value={bright[tg.id] ?? 100}
+                 oninput={(e) => {
+                   const v = +(e.currentTarget as HTMLInputElement).value
+                   bright[tg.id] = v
+                   allBrightness(tg.keys, v)
+                 }} />
+        </label>
+        {#if tg.effects.length > 0}
+          <label class="field">
+            <span>{t('effects.effect')}</span>
+            <select onchange={(e) => {
+              const value = (e.currentTarget as HTMLSelectElement).value
+              if (value === '') return
+              const fx = tg.effects[+value]
+              if (fx) allEffect(tg.keys, fx)
+            }}>
+              <option value="">—</option>
+              {#each tg.effects as fx, i}<option value={i}>{fx.name}</option>{/each}
+            </select>
+          </label>
+        {/if}
       </div>
-      <label class="field">
-        <span>{t('effects.color')}</span>
-        <ColorSelect onpick={allColor} />
-      </label>
-      <label class="field">
-        <span>{t('effects.brightness')} — {allBright}%</span>
-        <input type="range" min="0" max="100" bind:value={allBright}
-               oninput={() => allBrightness(allBright)} />
-      </label>
-    </div>
+    {/each}
 
     <div class="card col">
       <strong>{t('effects.saveScene')}</strong>

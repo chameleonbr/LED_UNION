@@ -3,7 +3,8 @@
   import { store, removeScene, setLook, type Look, type Scene } from '../store.svelte.ts'
   import { t } from '../i18n.svelte.ts'
 
-  let busy = $state('')
+  // Scenes may run side by side; each Apply stays disabled only while its own runs.
+  let running = $state<string[]>([])
   let error = $state('')
 
   function rgb(hex: string) {
@@ -18,27 +19,33 @@
   async function applyLook(key: string, look: Look) {
     const keys = [key]
     if (look.power !== undefined) {
-      await applyTo(keys, (d, n, c) => d.power(look.power!, n, c))
+      await applyTo(keys, (d, n, c, v) => d.power(look.power!, n, c, v))
     }
     if (look.brightness !== undefined) {
-      await applyTo(keys, (d, n, c) => d.brightness(look.brightness!, n, c))
+      await applyTo(keys, (d, n, c, v) => d.brightness(look.brightness!, n, c, v))
     }
     if (look.speed !== undefined) {
-      await applyTo(keys, (d, n, c) => d.speed(look.speed!, n, c))
+      await applyTo(keys, (d, n, c, v) => d.speed(look.speed!, n, c, v))
     }
     if (look.colorHex) {
       const { r, g, b } = rgb(look.colorHex)
-      await applyTo(keys, (d, n, c) => d.rgb(r, g, b, n, c))
+      await applyTo(keys, (d, n, c, v) => d.rgb(r, g, b, n, c, v))
+    } else if (look.white !== undefined) {
+      await applyTo(keys, (d, n, _c, v) => d.white?.(look.white!, n, v))
+    } else if (look.cct !== undefined) {
+      await applyTo(keys, (d, n, _c, v) => d.cct?.(look.cct!, 100 - look.cct!, n, v))
     }
     if (look.customEffectId) {
       const fx = store.customEffects.find((f) => f.id === look.customEffectId)
       if (fx) {
-        await sendFrames(key, (d, n, c) =>
-          d.customEffect?.({ colors: fx.colors.map(rgb), fade: fx.fade }, n, c) ?? [],
+        await sendFrames(key, (d, n, c, v) =>
+          d.customEffect?.({ colors: fx.colors.map(rgb), fade: fx.fade }, n, c, v) ?? [],
         )
+        // Same as DeviceCard.runCustom: the sequence plays at its own speed.
+        await applyTo(keys, (d, n, c, v) => d.speed(fx.speed, n, c, v))
       }
     } else if (look.effect) {
-      await applyTo(keys, (d, n, c) => d.effect(look.effect!, n, c))
+      await applyTo(keys, (d, n, c, v) => d.effect(look.effect!, n, c, v))
     }
     setLook(key, look)
   }
@@ -51,14 +58,15 @@
    * hitting a scene works without connecting by hand first.
    */
   async function run(s: Scene) {
-    busy = s.id
+    if (running.includes(s.id)) return
+    running = [...running, s.id]
     error = ''
     try {
       for (const entry of s.entries) await applyLook(entry.key, entry.look)
     } catch (e) {
       error = e instanceof Error ? e.message : String(e)
     } finally {
-      busy = ''
+      running = running.filter((id) => id !== s.id)
     }
   }
 </script>
@@ -78,7 +86,7 @@
         <div class="truncate">{s.name}</div>
         <div class="small muted">{t('scenes.count', { n: s.entries.length })}</div>
       </div>
-      <button class="primary small" onclick={() => run(s)} disabled={busy === s.id}>
+      <button class="primary small" onclick={() => run(s)} disabled={running.includes(s.id)}>
         {t('scenes.apply')}
       </button>
       <button class="ghost danger small" title={t('common.remove')}

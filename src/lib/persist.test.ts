@@ -58,6 +58,53 @@ test('a look attached to an old output follows its name to the new key', () => {
   assert.deepEqual(s.looks['a#0'], { colorHex: '#00ff00' })
 })
 
+test('old channel keys that overlap new index keys land on the right output', () => {
+  // ch 1 and ch 2 become #0 and #1, and the old `a#1` is also the new key of output 2.
+  const s = migrate({
+    devices: [
+      {
+        id: 'a',
+        name: 'LEDBLE-02',
+        outputs: [
+          { ch: 1, label: 'um' },
+          { ch: 2, label: 'dois' },
+        ],
+      },
+    ],
+    looks: { 'a#1': { colorHex: '#111111' }, 'a#2': { colorHex: '#222222' } },
+    groups: [{ id: 'g', name: 'g', deviceIds: ['a#2'] }],
+    scenes: [{ id: 's', name: 's', entries: [{ key: 'a#1', look: {} }] }],
+  })
+  assert.deepEqual(s.looks, { 'a#0': { colorHex: '#111111' }, 'a#1': { colorHex: '#222222' } })
+  assert.deepEqual(s.groups[0].deviceIds, ['a#1'])
+  assert.equal(s.scenes[0].entries[0].key, 'a#0')
+})
+
+test('an output with no old look does not inherit its neighbour', () => {
+  const s = migrate({
+    devices: [{ id: 'a', name: 'LEDBLE-02', outputs: [{ ch: 1, label: 'um' }, { ch: 2, label: 'dois' }] }],
+    looks: { 'a#1': { colorHex: '#111111' } },
+  })
+  assert.deepEqual(s.looks, { 'a#0': { colorHex: '#111111' } })
+})
+
+test('one malformed field is repaired without losing the others', () => {
+  const s = migrate({
+    devices: [{ id: 'a', name: 'BLEDIM' }, null, 'x'],
+    scenes: {},
+    looks: [],
+    labels: ['x'],
+    groups: 'nope',
+    customEffects: [{ id: 'c', name: 'c', colors: ['#ffffff'], speed: 50, fade: false }, 7],
+  })
+  assert.deepEqual(s.devices.map((d) => d.id), ['a'])
+  assert.deepEqual(s.scenes, [])
+  assert.deepEqual(s.looks, {})
+  assert.deepEqual(s.labels, {})
+  assert.deepEqual(s.groups, [])
+  assert.equal(s.customEffects.length, 1)
+})
+
 test('scenes from the old single-colour shape are dropped, not misapplied', () => {
   // They recorded one colour with no notion of which device it was for, so there is no
   // faithful mapping onto per-device entries. Keeping them would apply someone's old

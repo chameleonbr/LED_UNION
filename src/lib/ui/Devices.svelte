@@ -5,7 +5,7 @@
   import {
     store, addGroup, removeGroup, renameDevice, renameEndpoint, labelOf,
   } from '../store.svelte.ts'
-  import { epKey } from '../endpoint.ts'
+  import { epKey, parseEp } from '../endpoint.ts'
   import { t } from '../i18n.svelte.ts'
 
   // The model says how many lights a controller drives; nobody has to declare it.
@@ -198,7 +198,7 @@
     <div class="card row">
       <div class="grow col" style="gap:2px">
         <div class="truncate">{g.name}</div>
-        <div class="small muted">{t('devices.count', { n: g.deviceIds.length })}</div>
+        <div class="small muted">{t('devices.count', { n: new Set(g.deviceIds.map((k) => parseEp(k).deviceId)).size })}</div>
       </div>
       <button class="ghost small" onclick={() => selectGroup(g.deviceIds)}>{t('devices.select')}</button>
       <button class="ghost danger small" onclick={() => removeGroup(g.id)}>✕</button>

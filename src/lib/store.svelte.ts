@@ -67,15 +67,6 @@ export function renameDevice(id: string, label: string) {
 }
 
 
-
-/**
- * Which channel byte reaches which physical output is firmware-specific, and the only
- * way to find out is to try. So the outputs are editable rather than fixed at 1 and 2.
- */
-
-
-
-
 export function setChannelMode(id: string, mode: number) {
   const d = store.devices.find((x) => x.id === id)
   if (!d) return
@@ -102,7 +93,9 @@ export function renameEndpoint(key: string, label: string) {
 
 export function forgetDevice(id: string) {
   store.devices = store.devices.filter((d) => d.id !== id)
-  for (const g of store.groups) g.deviceIds = g.deviceIds.filter((x) => x !== id)
+  for (const g of store.groups) {
+    g.deviceIds = g.deviceIds.filter((x) => x !== id && !x.startsWith(`${id}#`))
+  }
   // Drop everything keyed to this device, including its outputs' looks.
   for (const map of [store.looks, store.labels] as Array<Record<string, unknown>>) {
     for (const key of Object.keys(map)) {
@@ -177,7 +170,9 @@ export function updateCustomEffect(id: string, patch: Partial<CustomEffect>) {
 export function removeCustomEffect(id: string) {
   store.customEffects = store.customEffects.filter((e) => e.id !== id)
   // A look pointing at a deleted effect would render a blank name forever.
-  for (const look of Object.values(store.looks)) {
+  // Scenes hold the effect by reference, so their entries are cleared the same way.
+  const scenes = store.scenes.flatMap((s) => s.entries.map((e) => e.look))
+  for (const look of [...Object.values(store.looks), ...scenes]) {
     if (look.customEffectId === id) delete look.customEffectId
   }
   save()
@@ -190,7 +185,8 @@ export function addScene(name: string, keys: string[]): Scene {
     id: uid(),
     name,
     // Snapshot the looks now: the scene must not change when the lights do.
-    entries: keys.map((key) => ({ key, look: structuredClone(lookOf(key)) })),
+    // $state.snapshot, not structuredClone: the stored look is a proxy, which cannot be cloned.
+    entries: keys.map((key) => ({ key, look: $state.snapshot(lookOf(key)) })),
   }
   store.scenes.push(scene)
   save()

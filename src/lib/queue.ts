@@ -12,7 +12,8 @@ const sleep = (ms: number) => new Promise<void>((r) => { setTimeout(r, ms) })
 export class WriteQueue {
   #tail: Promise<void> = Promise.resolve()
   #last = 0
-  #pending = new Map<string, () => Promise<void>>()
+  /** One slot per key: the newest op, and the result every caller of that slot awaits. */
+  #pending = new Map<string, { op: () => Promise<void>; result: Promise<void> }>()
   #gapMs: number
 
   constructor(gapMs: number) {
@@ -29,14 +30,18 @@ export class WriteQueue {
    * A later call with the same key replaces one still waiting its turn.
    */
   pushLatest(key: string, op: () => Promise<void>): Promise<void> {
-    const superseded = this.#pending.has(key)
-    this.#pending.set(key, op)
-    if (superseded) return this.#tail
-    return this.#chain(async () => {
-      const latest = this.#pending.get(key)
+    const waiting = this.#pending.get(key)
+    if (waiting) {
+      waiting.op = op
+      return waiting.result
+    }
+    const slot = { op, result: Promise.resolve() }
+    this.#pending.set(key, slot)
+    slot.result = this.#chain(async () => {
       this.#pending.delete(key)
-      if (latest) await latest()
+      await slot.op()
     })
+    return slot.result
   }
 
   #chain(op: () => Promise<void>): Promise<void> {

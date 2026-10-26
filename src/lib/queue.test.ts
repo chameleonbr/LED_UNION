@@ -62,3 +62,13 @@ test('a failed write does not wedge the queue', async () => {
   await q.push(async () => { ran = true })
   assert.ok(ran, 'queue stalled after an error')
 })
+
+test('every caller of a superseded slot sees the write that ran', async () => {
+  const q = new WriteQueue(0)
+  const blocker = q.push(() => sleep(20))
+  const first = q.pushLatest('rgb', async () => {})
+  const second = q.pushLatest('rgb', async () => { throw new Error('gatt busy') })
+  await blocker
+  await assert.rejects(first)
+  await assert.rejects(second)
+})

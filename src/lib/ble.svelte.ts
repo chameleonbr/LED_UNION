@@ -1,4 +1,5 @@
 import { WriteQueue } from './queue.ts'
+import { t } from './i18n.svelte.ts'
 export { parseHex, toHex } from './hex.ts'
 import { epKey, parseEp } from './endpoint.ts'
 export { epKey, parseEp }
@@ -7,6 +8,12 @@ import { forgetDevice, rememberDevice, store } from './store.svelte.ts'
 
 /** What to show a human. Never pass this to a driver. */
 export const displayName = (c: { name: string; label?: string }) => c.label || c.name
+
+/**
+ * The `name` builders get. Stateful families key their memory by it, and every BLEDIM
+ * advertises as "BLEDIM", so two of them would share one memory under the plain name.
+ */
+const builderName = (c: Conn) => (c.driver.keysStateByName ? `${c.name}@${c.id}` : c.name)
 
 export type ConnState = 'offline' | 'connecting' | 'online' | 'error'
 
@@ -41,27 +48,33 @@ const connectedAt = new Map<string, number>()
 export const supported = () =>
   typeof navigator !== 'undefined' && 'bluetooth' in navigator
 
+// Re-adding or restoring the same device must not stack a second disconnect listener.
+const listening = new WeakSet<BluetoothDevice>()
+
 function track(device: BluetoothDevice, driver: Driver) {
-  const name = device.name ?? '(sem nome)'
+  const name = device.name ?? t('devices.unnamed')
   const saved = store.devices.find((d) => d.id === device.id)
   conns[device.id] ??= { id: device.id, name, driver, state: 'offline' }
   Object.assign(conns[device.id], { name, label: saved?.label })
   if (!live.has(device.id)) {
     live.set(device.id, { device, queue: new WriteQueue(driver.minGapMs) })
   }
-  device.addEventListener('gattserverdisconnected', () => {
-    const c = conns[device.id]
-    if (c) {
-      c.state = 'offline'
-      const up = connectedAt.get(device.id)
-      // A link that dies in under a couple of seconds usually means the device
-      // expected a handshake we did not send.
-      if (up) c.lastLinkMs = Date.now() - up
-    }
-    connectedAt.delete(device.id)
-    const l = live.get(device.id)
-    if (l) l.char = undefined
-  })
+  if (!listening.has(device)) {
+    listening.add(device)
+    device.addEventListener('gattserverdisconnected', () => {
+      const c = conns[device.id]
+      if (c) {
+        c.state = 'offline'
+        const up = connectedAt.get(device.id)
+        // A link that dies in under a couple of seconds usually means the device
+        // expected a handshake we did not send.
+        if (up) c.lastLinkMs = Date.now() - up
+      }
+      connectedAt.delete(device.id)
+      const l = live.get(device.id)
+      if (l) l.char = undefined
+    })
+  }
   rememberDevice({ id: device.id, name, label: saved?.label, driverId: driver.id })
 }
 
@@ -138,13 +151,13 @@ async function connectGatt(device: BluetoothDevice): Promise<BluetoothRemoteGATT
 function explain(e: unknown): string {
   const raw = e instanceof Error ? e.message : String(e)
   if (/NetworkError|GATT Server is disconnected|connection attempt failed/i.test(raw)) {
-    return `${raw} — outro app pode estar segurando o aparelho; force a parada dele e tente de novo`
+    return `${raw} — ${t('err.hintBusy')}`
   }
-  if (/No Services matching UUID|Nenhum serviço conhecido/i.test(raw)) {
-    return `${raw} — use a aba Debug para listar o que o aparelho realmente expõe`
+  if (/No Services matching UUID/i.test(raw) || raw === t('err.noService')) {
+    return `${raw} — ${t('err.hintDebug')}`
   }
   if (/SecurityError|not allowed/i.test(raw)) {
-    return `${raw} — origem sem permissão; confira que a página está em HTTPS`
+    return `${raw} — ${t('err.hintHttps')}`
   }
   return raw
 }
@@ -184,15 +197,15 @@ async function resolveDriver(
   }
   throw new Error(
     seen.length
-      ? `Serviço encontrado, mas sem característica gravável. Vistas: ${seen.join(', ')}`
-      : 'Nenhum serviço conhecido encontrado neste aparelho',
+      ? t('err.noWritable', { seen: seen.join(', ') })
+      : t('err.noService'),
   )
 }
 
 export async function connect(id: string): Promise<void> {
   const l = live.get(id)
   const c = conns[id]
-  if (!l || !c) throw new Error('Aparelho não pareado nesta sessão — use Adicionar')
+  if (!l || !c) throw new Error(t('err.notPairedAdd'))
   if (c.state === 'online' && l.char) return
 
   c.state = 'connecting'
@@ -241,8 +254,6 @@ export function disconnect(id: string) {
   if (c) c.state = 'offline'
 }
 
-const sleepMs = (ms: number) => new Promise<void>((r) => { setTimeout(r, ms) })
-
 async function writeOnce(
   char: BluetoothRemoteGATTCharacteristic,
   part: Uint8Array,
@@ -268,7 +279,7 @@ async function writeOnce(
 
 async function writeRaw(l: Live, frame: Uint8Array, driver?: Driver) {
   const char = l.char
-  if (!char) throw new Error('Não conectado')
+  if (!char) throw new Error(t('err.notConnected'))
   const chunk = driver?.chunkSize
   const withResponse = driver?.writeWithResponse ?? false
 
@@ -279,12 +290,11 @@ async function writeRaw(l: Live, frame: Uint8Array, driver?: Driver) {
   // Families with a fixed MTU assumption split the frame themselves and pace the
   // pieces; the gap is the only flow control they have.
   for (let i = 0; i < frame.length; i += chunk) {
-    if (i > 0) await sleepMs(driver?.minGapMs ?? 30)
+    if (i > 0) await sleep(driver?.minGapMs ?? 30)
     await writeOnce(char, frame.subarray(i, i + chunk), withResponse)
   }
 }
 
-/** Devices the current selection resolves to, skipping ones that are not live. */
 /**
  * An endpoint key is `deviceId#index`, where the index points into the model's own
  * output list. Resolving it gives the channel byte or protocol variant to send with.
@@ -295,11 +305,6 @@ export function outputAt(deviceId: string, index?: number) {
   const out = c?.driver.outputs?.(c.name)?.[index]
   return { ch: out?.ch, variant: out?.variant }
 }
-
-export const targets = () =>
-  [...new Set(selection.ids.map((k) => parseEp(k).deviceId))]
-    .map((id) => conns[id])
-    .filter(Boolean)
 
 /**
  * Build a frame per device (drivers differ) and write it to everything selected.
@@ -321,29 +326,26 @@ export async function applyTo(
       const c = conns[deviceId]
       const l = live.get(deviceId)
       if (!c || !l) return
-      if (c.state !== 'online') await connect(deviceId)
-      const o = outputAt(deviceId, ch)
-      const frame = build(c.driver, c.name, o.ch, o.variant)
-      if (!frame) return
-      const op = () => writeRaw(l, frame, c.driver)
-      // Coalescing is per output, or two outputs would cancel each other out.
-      return coalesceKey
-        ? l.queue.pushLatest(`${coalesceKey}:${ch ?? ''}`, op)
-        : l.queue.push(op)
+      // One device failing must not stop the others, but the card has to say so.
+      try {
+        if (c.state !== 'online') await connect(deviceId)
+        const o = outputAt(deviceId, ch)
+        const frame = build(c.driver, builderName(c), o.ch, o.variant)
+        if (!frame) return
+        const op = () => writeRaw(l, frame, c.driver)
+        // Coalescing is per output, or two outputs would cancel each other out.
+        await (coalesceKey
+          ? l.queue.pushLatest(`${coalesceKey}:${ch ?? ''}`, op)
+          : l.queue.push(op))
+        c.error = undefined
+      } catch (e) {
+        // connect() has already explained its own failure; explaining again doubles the hint.
+        if (c.state !== 'error') c.error = explain(e)
+      }
     }),
   )
 }
 
-/** Applies to whatever is currently selected. */
-export const apply = (
-  build: (
-    driver: Driver,
-    name: string,
-    ch?: number,
-    variant?: string,
-  ) => Uint8Array | undefined,
-  coalesceKey?: string,
-) => applyTo(selection.ids, build, coalesceKey)
 
 /**
  * Send an ordered sequence of frames to one logical device.
@@ -359,12 +361,18 @@ export async function sendFrames(
   const { deviceId, ch } = parseEp(key)
   const c = conns[deviceId]
   const l = live.get(deviceId)
-  if (!c || !l) throw new Error('Aparelho não pareado nesta sessão')
+  if (!c || !l) throw new Error(t('err.notPaired'))
   if (c.state !== 'online') await connect(deviceId)
 
   const o = outputAt(deviceId, ch)
-  for (const frame of build(c.driver, c.name, o.ch, o.variant)) {
-    await l.queue.push(() => writeRaw(l, frame, c.driver))
+  try {
+    for (const frame of build(c.driver, builderName(c), o.ch, o.variant)) {
+      await l.queue.push(() => writeRaw(l, frame, c.driver))
+    }
+    c.error = undefined
+  } catch (e) {
+    if (c.state !== 'error') c.error = explain(e)
+    throw new Error(c.error)
   }
 }
 
@@ -390,7 +398,7 @@ function propsOf(ch: BluetoothRemoteGATTCharacteristic): string[] {
  */
 export async function inspect(id: string): Promise<ServiceInfo[]> {
   const l = live.get(id)
-  if (!l) throw new Error('Aparelho não pareado nesta sessão')
+  if (!l) throw new Error(t('err.notPaired'))
   const server = await connectGatt(l.device)
 
   let services: BluetoothRemoteGATTService[] = []
@@ -430,7 +438,7 @@ export async function sendRaw(
 ): Promise<void> {
   const l = live.get(id)
   const c = conns[id]
-  if (!l || !c) throw new Error('Aparelho não pareado nesta sessão')
+  if (!l || !c) throw new Error(t('err.notPaired'))
 
   if (charUuid && charUuid !== l.char?.uuid) {
     const server = await connectGatt(l.device)
@@ -442,7 +450,7 @@ export async function sendRaw(
         }
       }
     }
-    throw new Error(`Característica ${charUuid} não encontrada`)
+    throw new Error(t('err.charNotFound', { uuid: charUuid }))
   }
   if (c.state !== 'online') await connect(id)
   await l.queue.push(() => writeRaw(l, frame, c.driver))

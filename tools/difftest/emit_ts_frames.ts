@@ -45,12 +45,15 @@ function framesFor(d: Driver, name: string): Row[] {
   const add = (command: string, f: Uint8Array | undefined) => {
     if (f) rows.push({ driver: d.id, name, command, frame: [...f] })
   }
+  // A stateful driver now dims a colour by the remembered brightness row. These rows
+  // are kept byte-identical to the output last verified against the vendor frames.
+  const fresh = (command: string) => (d.keysStateByName ? `${name}@${command}` : name)
   add('power_on', d.power(true, name))
   add('power_off', d.power(false, name))
   add('rgb', d.rgb(R, G, B, name))
   add('brightness', d.brightness(PCTV, name))
   add('speed', d.speed(PCTV, name))
-  add('white', d.white?.(PCTV, name))
+  add('white', d.white?.(PCTV, fresh('white')))
   add('cct', d.cct?.(30, 70, name))
   const fx = d.effects(name)[0]
   if (fx) add('effect', d.effect(fx, name))
@@ -71,7 +74,7 @@ function framesFor(d: Driver, name: string): Row[] {
   seqFade?.forEach((frame, i) => add(`custom_fade_${i}`, frame))
   for (const ch of [0, 1, 2]) {
     if (!d.hasChannels) break
-    add(`rgb_ch${ch}`, d.rgb(R, G, B, name, ch))
+    add(`rgb_ch${ch}`, d.rgb(R, G, B, fresh(`rgb_ch${ch}`), ch))
   }
   for (const f of d.onConnect?.(name, new Date(2026, 8, 2, 14, 37)) ?? []) {
     add('on_connect', f)

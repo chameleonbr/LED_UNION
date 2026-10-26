@@ -70,8 +70,8 @@ type DeviceState = {
   speed: number
   brightness: number
   strobe: number
-  /** Last static colour sent, or undefined while an effect is playing. */
-  color?: { r: number; g: number; b: number }
+  /** Last static colour sent, unscaled, or undefined while an effect is playing. */
+  color?: { r: number; g: number; b: number; w: number }
 }
 const states = new Map<string, DeviceState>()
 const stateFor = (name: string): DeviceState => {
@@ -165,8 +165,16 @@ function staticScene(r: number, g: number, b: number, w: number): Uint8Array {
   return frame(CMD.IMMEDIATE_SCENE, p)
 }
 
+/** The remembered static colour at the remembered brightness, never compounding. */
+function scaledStatic(s: DeviceState): Uint8Array {
+  const c = s.color!
+  const k = s.brightness / 255
+  return staticScene(byte(c.r * k), byte(c.g * k), byte(c.b * k), byte(c.w * k))
+}
+
 export const bledim: Driver = {
   id: 'bledim',
+  keysStateByName: true,
   label: 'BLEDIM',
   service: SERVICE,
   writeChar: WRITE_CHAR,
@@ -212,14 +220,19 @@ export const bledim: Driver = {
    * The shape is ScenePara.FlushStaticBuf: one colour, no effect, speed 192.
    */
   rgb(r, g, b, name) {
-    const c = { r: byte(r), g: byte(g), b: byte(b) }
-    stateFor(name).color = c
-    return staticScene(c.r, c.g, c.b, 0)
+    const s = stateFor(name)
+    s.color = { r: byte(r), g: byte(g), b: byte(b), w: 0 }
+    return scaledStatic(s)
   },
 
   // On RGB-only wiring there is no white channel, so a white-only scene reads as off.
   // The card sends r = g = b there instead; this is for the wirings that do have one.
-  white: (v) => staticScene(0, 0, 0, from100(v)),
+  // Remembered like a colour, or a later brightness change would bring the old RGB back.
+  white(v, name) {
+    const s = stateFor(name)
+    s.color = { r: 0, g: 0, b: 0, w: from100(v) }
+    return scaledStatic(s)
+  },
 
   /**
    * The original app has no brightness slider on its colour screen: brightness there is
@@ -229,14 +242,7 @@ export const bledim: Driver = {
   brightness(v, name) {
     const s = stateFor(name)
     s.brightness = from100(v)
-    if (!s.color) return speedBrightness(name)
-    const k = s.brightness / 255
-    return staticScene(
-      byte(s.color.r * k),
-      byte(s.color.g * k),
-      byte(s.color.b * k),
-      0,
-    )
+    return s.color ? scaledStatic(s) : speedBrightness(name)
   },
 
   speed(v, name) {

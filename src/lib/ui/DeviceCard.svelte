@@ -35,6 +35,8 @@
   const look = $derived(lookOf(dkey))
   const caps = $derived(conn.driver.caps(conn.name, variant))
   const builtIn = $derived<Effect[]>(conn.driver.effects(conn.name, variant))
+  // Probes with the advertised name, not the per-device key builders get, so a
+  // stateful driver's memory for the real device is left alone.
   const supportsCustom = $derived(
     (conn.driver.customEffect?.({ colors: [{ r: 1, g: 1, b: 1 }], fade: false }, conn.name)
       ?.length ?? 0) > 0,
@@ -67,7 +69,7 @@
     const { r, g, b } = rgb(hex)
     await applyTo([dkey], (d, n, c, v) => d.rgb(r, g, b, n, c, v), 'rgb')
     // A static colour replaces whatever effect was playing.
-    setLook(dkey, { colorHex: hex, effect: undefined, customEffectId: undefined })
+    setLook(dkey, { colorHex: hex, white: undefined, cct: undefined, effect: undefined, customEffectId: undefined })
   }
 
   async function setBrightness(v: number) {
@@ -89,15 +91,18 @@
   async function setWhite(v: number) {
     if (hasRealWhite) {
       await applyTo([dkey], (d, n, _c, vr) => d.white?.(v, n, vr), 'white')
+      setLook(dkey, { white: v, colorHex: undefined, cct: undefined, effect: undefined, customEffectId: undefined })
       return
     }
     const k = Math.round((v * 255) / 100)
     await applyTo([dkey], (d, n, c, v) => d.rgb(k, k, k, n, c, v), 'rgb')
     const hex = `#${[k, k, k].map((x) => x.toString(16).padStart(2, '0')).join('')}`
-    setLook(dkey, { colorHex: hex, effect: undefined, customEffectId: undefined })
+    setLook(dkey, { colorHex: hex, white: undefined, cct: undefined, effect: undefined, customEffectId: undefined })
   }
-  const setCct = (v: number) =>
-    applyTo([dkey], (d, n, _c, vr) => d.cct?.(v, 100 - v, n, vr), 'cct')
+  async function setCct(v: number) {
+    await applyTo([dkey], (d, n, _c, vr) => d.cct?.(v, 100 - v, n, vr), 'cct')
+    setLook(dkey, { cct: v, colorHex: undefined, white: undefined, effect: undefined, customEffectId: undefined })
+  }
 
   async function chooseEffect(e: Event) {
     const v = (e.currentTarget as HTMLSelectElement).value
@@ -326,7 +331,7 @@
     {#if showWhite}
       <label class="field">
         <span>{t('effects.white')}{hasRealWhite ? '' : ` · ${t('effects.whiteRgb')}`}</span>
-        <input type="range" min="0" max="100" value="0"
+        <input type="range" min="0" max="100" value={look.white ?? 0}
                oninput={(e) => setWhite(+(e.currentTarget as HTMLInputElement).value)} />
       </label>
     {/if}
@@ -334,7 +339,7 @@
     {#if caps.cct && conn.driver.cct}
       <label class="field">
         <span>{t('effects.cct')}</span>
-        <input type="range" min="0" max="100" value="50"
+        <input type="range" min="0" max="100" value={look.cct ?? 50}
                oninput={(e) => setCct(+(e.currentTarget as HTMLInputElement).value)} />
       </label>
     {/if}

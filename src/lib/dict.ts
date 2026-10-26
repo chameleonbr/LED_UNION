@@ -7,6 +7,16 @@
 export type Dict = Record<string, string>
 
 export const en: Dict = {
+  'err.notPaired': 'Device not paired in this session',
+  'err.notPairedAdd': 'Device not paired in this session — use Add',
+  'err.notConnected': 'Not connected',
+  'err.noWritable': 'Service found, but no writable characteristic. Seen: {seen}',
+  'err.noService': 'No known service found on this device',
+  'err.charNotFound': 'Characteristic {uuid} not found',
+  'err.hintBusy': 'another app may be holding the device; force-stop it and try again',
+  'err.hintDebug': 'use the Debug tab to list what the device actually exposes',
+  'err.hintHttps': 'origin not allowed; check the page is on HTTPS',
+  'devices.unnamed': '(unnamed)',
   'app.selected': '{n} selected',
   'app.online': '{n} online',
   'nav.devices': 'Devices',
@@ -106,6 +116,16 @@ export const en: Dict = {
 }
 
 export const ptBR: Dict = {
+  'err.notPaired': 'Aparelho não pareado nesta sessão',
+  'err.notPairedAdd': 'Aparelho não pareado nesta sessão — use Adicionar',
+  'err.notConnected': 'Não conectado',
+  'err.noWritable': 'Serviço encontrado, mas sem característica gravável. Vistas: {seen}',
+  'err.noService': 'Nenhum serviço conhecido encontrado neste aparelho',
+  'err.charNotFound': 'Característica {uuid} não encontrada',
+  'err.hintBusy': 'outro app pode estar segurando o aparelho; force a parada dele e tente de novo',
+  'err.hintDebug': 'use a aba Debug para listar o que o aparelho realmente expõe',
+  'err.hintHttps': 'origem sem permissão; confira que a página está em HTTPS',
+  'devices.unnamed': '(sem nome)',
   'app.selected': '{n} selecionado(s)',
   'app.online': '{n} online',
   'nav.devices': 'Aparelhos',
