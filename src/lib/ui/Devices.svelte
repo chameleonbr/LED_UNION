@@ -1,6 +1,6 @@
 <script lang="ts">
   import {
-    conns, selection, addDevice, connect, disconnect, displayName, forget,
+    conns, selection, addDevice, connect, connectOrRelink, disconnect, displayName, forget,
   } from '../ble.svelte.ts'
   import {
     store, addGroup, removeGroup, renameDevice, renameEndpoint, labelOf,
@@ -151,7 +151,10 @@
       {#if c.state === 'online'}
         <button class="ghost small" onclick={() => disconnect(c.id)}>{t('devices.disconnect')}</button>
       {:else}
-        <button class="ghost small" onclick={() => connect(c.id)}>{t('devices.connect')}</button>
+        <button class="ghost small" onclick={() => connectOrRelink(c.id).catch((e) => {
+          const msg = e instanceof Error ? e.message : String(e)
+          if (!/cancel/i.test(msg)) error = msg
+        })}>{t('devices.connect')}</button>
       {/if}
       <button class="ghost danger small" onclick={() => forget(c.id)}>✕</button>
     </div>

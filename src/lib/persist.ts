@@ -109,6 +109,31 @@ export const empty = (): Persisted => ({
   customEffects: [],
 })
 
+/**
+ * Move everything saved for one device to a new id: its entry, the looks and names of
+ * its outputs, and its place in groups and scenes. Chrome can hand the same physical
+ * device back under a new id when it is picked again in the chooser.
+ */
+export function rekeyDevice(s: Persisted, from: string, to: string) {
+  if (from === to) return
+  const move = (k: string) =>
+    k === from ? to : k.startsWith(`${from}#`) ? to + k.slice(from.length) : k
+  const old = s.devices.find((d) => d.id === from)
+  s.devices = s.devices.filter((d) => d.id !== to)
+  if (old) old.id = to
+  for (const map of [s.looks, s.labels] as Array<Record<string, unknown>>) {
+    for (const k of Object.keys(map)) {
+      const n = move(k)
+      if (n !== k) {
+        map[n] = map[k]
+        delete map[k]
+      }
+    }
+  }
+  for (const g of s.groups) g.deviceIds = g.deviceIds.map(move)
+  for (const sc of s.scenes) sc.entries = sc.entries.map((e) => ({ ...e, key: move(e.key) }))
+}
+
 export function migrate(raw: unknown): Persisted {
   const base = empty()
   if (!raw || typeof raw !== 'object') return base

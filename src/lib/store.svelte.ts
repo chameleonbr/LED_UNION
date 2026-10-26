@@ -1,6 +1,7 @@
 import {
   empty,
   migrate,
+  rekeyDevice,
   KEY,
   LEGACY_KEY,
   seedColors,
@@ -88,6 +89,11 @@ export function renameEndpoint(key: string, label: string) {
   const trimmed = label.trim()
   if (trimmed) store.labels[key] = trimmed
   else delete store.labels[key]
+  save()
+}
+
+export function rekey(from: string, to: string) {
+  rekeyDevice(store, from, to)
   save()
 }
 

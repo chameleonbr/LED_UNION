@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { empty, migrate, seedColors } from './persist.ts'
+import { empty, migrate, rekeyDevice, seedColors } from './persist.ts'
 
 test('a fresh install starts with a usable palette', () => {
   const s = migrate(null)
@@ -143,4 +143,23 @@ test('seedColors returns a fresh array each call', () => {
   a[0].hex = '#000000'
   assert.notEqual(seedColors()[0].hex, '#000000')
   assert.equal(empty().colors.length, 8)
+})
+
+test('a device picked again under a new id keeps everything saved for it', () => {
+  const s = migrate({
+    devices: [{ id: 'old', name: 'LEDBLE-02', label: 'Carro', channelMode: 3 }],
+    looks: { 'old#0': { colorHex: '#ff0000' }, other: { power: true } },
+    labels: { 'old#1': 'maçaneta' },
+    groups: [{ id: 'g', name: 'g', deviceIds: ['old#0', 'other'] }],
+    scenes: [{ id: 's', name: 's', entries: [{ key: 'old#1', look: {} }] }],
+  })
+  // The chooser already re-saved the device under its new id, with no label.
+  s.devices.push({ id: 'new', name: 'LEDBLE-02', driverId: 'ffe0' })
+  rekeyDevice(s, 'old', 'new')
+  assert.deepEqual(s.devices.map((d) => [d.id, d.label]), [['new', 'Carro']])
+  assert.equal(s.devices[0].channelMode, 3)
+  assert.deepEqual(s.looks, { 'new#0': { colorHex: '#ff0000' }, other: { power: true } })
+  assert.deepEqual(s.labels, { 'new#1': 'maçaneta' })
+  assert.deepEqual(s.groups[0].deviceIds, ['new#0', 'other'])
+  assert.equal(s.scenes[0].entries[0].key, 'new#1')
 })

@@ -4,7 +4,7 @@ export { parseHex, toHex, BadHexError } from './hex.ts'
 import { epKey, parseEp } from './endpoint.ts'
 export { epKey, parseEp }
 import { allServices, driverFor, drivers, type Driver } from './protocol/index.ts'
-import { forgetDevice, rememberDevice, store } from './store.svelte.ts'
+import { forgetDevice, rekey, rememberDevice, store } from './store.svelte.ts'
 
 /** What to show a human. Never pass this to a driver. */
 export const displayName = (c: { name: string; label?: string }) => c.label || c.name
@@ -111,18 +111,62 @@ export async function restore(): Promise<void> {
   )
 }
 
-/** Opens the browser's device chooser. One device per call, by design. */
-export async function addDevice(): Promise<Conn | undefined> {
-  const device = await navigator.bluetooth.requestDevice({
-    filters: allServices.map((s) => ({ services: [s] })),
-    optionalServices: allServices,
-  })
+/**
+ * Chrome can return a device picked again in the chooser under a new id, and without
+ * the new permissions backend getDevices() returns nothing after a reload. Either way
+ * the saved name, outputs, looks and groups would stay behind on the old id, so the
+ * new id takes them over.
+ */
+function adopt(device: BluetoothDevice, savedId: string) {
+  if (savedId === device.id) return
+  disconnect(savedId)
+  delete conns[savedId]
+  live.delete(savedId)
+  connectedAt.delete(savedId)
+  const moved = (k: string) => (parseEp(k).deviceId === savedId ? device.id + k.slice(savedId.length) : k)
+  selection.ids = selection.ids.map(moved)
+  rekey(savedId, device.id)
+}
+
+async function pickAndConnect(device: BluetoothDevice, savedId?: string) {
+  if (savedId) adopt(device, savedId)
   // The chooser already filtered on our service uuids, so anything that comes back
   // speaks one of them. The name is only a hint for which; connect() confirms.
   track(device, driverFor(device.name ?? '') ?? drivers[0])
   await connect(device.id)
   return conns[device.id]
 }
+
+/** Opens the browser's device chooser. One device per call, by design. */
+export async function addDevice(): Promise<Conn | undefined> {
+  const device = await navigator.bluetooth.requestDevice({
+    filters: allServices.map((s) => ({ services: [s] })),
+    optionalServices: allServices,
+  })
+  // A device already saved under another id is most likely this one coming back. Only
+  // a single unlinked match is safe to take over: two "BLEDIM"s cannot be told apart.
+  const known = store.devices.some((d) => d.id === device.id)
+  const same = store.devices.filter((d) => d.name === device.name && !live.has(d.id))
+  return pickAndConnect(device, !known && same.length === 1 ? same[0].id : undefined)
+}
+
+/**
+ * Re-pair one saved device the browser no longer hands back. The chooser is narrowed
+ * to its name, and whatever is picked inherits everything saved for it.
+ */
+export async function relink(savedId: string): Promise<Conn | undefined> {
+  const saved = store.devices.find((d) => d.id === savedId)
+  if (!saved) return addDevice()
+  const device = await navigator.bluetooth.requestDevice({
+    filters: [{ name: saved.name }],
+    optionalServices: allServices,
+  })
+  return pickAndConnect(device, savedId)
+}
+
+/** Connect, or re-pair first when this session has no link to the device yet. */
+export const connectOrRelink = (id: string) =>
+  live.has(id) ? connect(id) : relink(id).then(() => {})
 
 const sleep = (ms: number) => new Promise<void>((r) => { setTimeout(r, ms) })
 
