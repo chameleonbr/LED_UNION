@@ -35,12 +35,8 @@
   const look = $derived(lookOf(dkey))
   const caps = $derived(conn.driver.caps(conn.name, variant))
   const builtIn = $derived<Effect[]>(conn.driver.effects(conn.name, variant))
-  // Probes with the advertised name, not the per-device key builders get, so a
-  // stateful driver's memory for the real device is left alone.
-  const supportsCustom = $derived(
-    (conn.driver.customEffect?.({ colors: [{ r: 1, g: 1, b: 1 }], fade: false }, conn.name)
-      ?.length ?? 0) > 0,
-  )
+  // Asked from caps, not by building a test frame: BLEDIM's builders remember state.
+  const supportsCustom = $derived(caps.custom && !!conn.driver.customEffect)
 
   const groupNames = $derived([
     ...new Set(builtIn.map((e) => e.group).filter(Boolean)),
@@ -378,7 +374,7 @@
                 applyTo([dkey], (d, n, c, v) => d.soundMode?.(soundModeId, n, source, c, v))} />
           </label>
         {/if}
-        {#if conn.driver.soundSensitivity}
+        {#if caps.sensitivity && conn.driver.soundSensitivity}
           <label class="field">
             <span>{t('sound.sensitivity')} — {sensitivity}%</span>
             <input type="range" min="0" max="100" bind:value={sensitivity}

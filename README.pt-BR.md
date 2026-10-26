@@ -181,7 +181,9 @@ Os drivers foram transcritos à mão do Java decompilado, e teste escrito à mã
 confirma o que o autor entendeu — não o que o app faz. O `tools/difftest/` extrai
 mecanicamente todo frame que os apps originais montam e compara com os nossos.
 
-**221 de 221 frames casam**, em três drivers e nove layouts de wire. O processo achou
+**221 de 221 frames casaram** na última rodada registrada, em três drivers e nove layouts
+de wire; o emissor cresceu para 259 frames desde então, então rode `npm run difftest` para
+a contagem atual. O processo achou
 cinco bugs reais que teste unitário não pegaria. Ver
 [`tools/difftest/README.md`](tools/difftest/README.md).
 

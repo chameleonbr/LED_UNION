@@ -144,6 +144,11 @@ export const ffe0: Driver = {
       speed: true,
       effects: true,
       scenes: false,
+      // Same exclusions as customEffect: these have no colour-list command.
+      custom: !['sun', 'like', 'pho'].includes(l),
+      // LEDSMART and LEDPHO have no sensitivity frame of their own; the builder falls
+      // back to the LEDBLE envelope, which is another family's command.
+      sensitivity: l !== 'smart' && l !== 'pho',
     }
   },
 
@@ -168,7 +173,7 @@ export const ffe0: Driver = {
       case 'sun':
         // No name table ships in the app's resources for these two, but the mode
         // command exists, so expose the ids plainly rather than hiding the feature.
-        return Array.from({ length: 16 }, (_, i) => ({ id: i, name: `Modo ${i + 1}` }))
+        return Array.from({ length: 16 }, (_, i) => ({ id: i, name: `M${i + 1}` }))
       default:
         return effects.ledble
     }

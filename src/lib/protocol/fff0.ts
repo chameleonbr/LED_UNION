@@ -38,6 +38,8 @@ export const fff0: Driver = {
       speed: true,
       effects: true,
       scenes: isMelk(name),
+      custom: false,
+      sensitivity: true,
     }
   },
 

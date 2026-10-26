@@ -733,3 +733,23 @@ test('bledim colour keeps the brightness already set, and white is remembered', 
   bledim.white!(100, B)
   assert.deepEqual(body(bledim.brightness(50, B)).slice(16, 20), [128, 0, 0, 0])
 })
+
+test('caps say which families have custom sequences and a sensitivity frame', () => {
+  for (const name of ['LEDSUN-1', 'LEDLIKE-1', 'LEDPHO-1']) {
+    assert.equal(ffe0.caps(name).custom, false, name)
+    // caps.custom must agree with what the builder actually does.
+    assert.deepEqual(ffe0.customEffect!({ colors: [{ r: 1, g: 1, b: 1 }], fade: false }, name), [])
+  }
+  assert.equal(ffe0.caps('LEDBLE-00').custom, true)
+  assert.equal(ffe0.caps('LEDSMART-1').sensitivity, false)
+  assert.equal(ffe0.caps('LEDPHO-1').sensitivity, false)
+  assert.equal(ffe0.caps('LEDDMX-00').sensitivity, true)
+  assert.equal(fff0.caps('MELK-OC').custom, false)
+})
+
+test('builders turn a non-number into 0 rather than NaN', async () => {
+  const { pct, byte } = await import('./types.ts')
+  assert.equal(pct(NaN), 0)
+  assert.equal(byte(Infinity), 0)
+  assert.equal(pct(150), 100)
+})

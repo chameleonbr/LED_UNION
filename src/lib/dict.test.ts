@@ -37,3 +37,11 @@ test('placeholders are filled, and an unknown one is left visible', () => {
 test('both dictionaries are reachable by name', () => {
   assert.deepEqual(Object.keys(dicts).sort(), ['en', 'pt-BR'])
 })
+
+test('a count of one takes the singular form when there is one', () => {
+  assert.equal(translate('en', 'devices.count', { n: 1 }), '1 device')
+  assert.equal(translate('en', 'devices.count', { n: 2 }), '2 devices')
+  assert.equal(translate('pt-BR', 'devices.count', { n: 1 }), '1 aparelho')
+  // Keys without a singular form are unaffected.
+  assert.equal(translate('en', 'app.online', { n: 1 }), '1 online')
+})

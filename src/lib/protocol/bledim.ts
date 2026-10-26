@@ -200,6 +200,8 @@ export const bledim: Driver = {
     speed: true,
     effects: true,
     scenes: false,
+    custom: true,
+    sensitivity: true,
   }),
 
   effects: () => effects,

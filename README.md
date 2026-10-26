@@ -180,7 +180,9 @@ The drivers were transcribed by hand from decompiled Java, and a hand-written te
 confirms what the author understood — not what the app does. `tools/difftest/`
 mechanically extracts every frame the original apps build and diffs it against ours.
 
-**221 of 221 frames match**, across three drivers and nine wire layouts. The process
+**221 of 221 frames matched** at the last recorded run, across three drivers and nine wire
+layouts; the emitter has since grown to 259 frames, so re-run `npm run difftest` for the
+current count. The process
 found five real bugs that unit tests could not have. See
 [`tools/difftest/README.md`](tools/difftest/README.md).
 

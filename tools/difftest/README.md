@@ -52,8 +52,9 @@ trees (a file or a directory).
 
 ## Result
 
-**221 of 221 frames match** the original apps, across three drivers and nine wire
-layouts. One matches by prefix only — BLEDIM's 72-byte scene, whose payload is copied
+**221 of 221 frames matched** the original apps at the last recorded run, across three
+drivers and nine wire layouts. `emit_ts_frames.ts` now emits 259 frames; the count here
+is refreshed by re-running the comparison. One matches by prefix only — BLEDIM's 72-byte scene, whose payload is copied
 in a loop.
 
 ### What it caught

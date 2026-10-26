@@ -1,8 +1,9 @@
 <script lang="ts">
   import {
-    conns, inspect, sendRaw, parseHex, displayName,
+    conns, inspect, sendRaw, parseHex, displayName, BadHexError,
     type ServiceInfo,
   } from '../ble.svelte.ts'
+  import { t } from '../i18n.svelte.ts'
 
   let deviceId = $state('')
   let services = $state<ServiceInfo[]>([])
@@ -33,14 +34,14 @@
       // on an unknown device, and we still want to see what it exposes.
       services = await inspect(deviceId)
       const n = services.reduce((a, s) => a + s.chars.length, 0)
-      note(`${services.length} serviço(s), ${n} característica(s)`)
+      note(t('dbg.found', { s: services.length, c: n }))
       const dropped = conns[deviceId]?.lastLinkMs
       if (dropped !== undefined && dropped < 3000) {
-        note(`aviso: aparelho derrubou o link em ${dropped}ms — cheira a handshake faltando`)
+        note(t('dbg.dropped', { ms: dropped }))
       }
       if (!charUuid && writable.length) charUuid = writable[0]
     } catch (e) {
-      note(`ERRO: ${e instanceof Error ? e.message : String(e)}`)
+      note(t('dbg.error', { msg: e instanceof Error ? e.message : String(e) }))
     } finally {
       busy = false
     }
@@ -52,9 +53,10 @@
     try {
       const frame = parseHex(hex)
       await sendRaw(deviceId, frame, charUuid || undefined)
-      note(`enviado ${frame.length}B → ${charUuid || 'padrão'}`)
+      note(t('dbg.sent', { n: frame.length, target: charUuid || t('dbg.default') }))
     } catch (e) {
-      note(`ERRO: ${e instanceof Error ? e.message : String(e)}`)
+      const msg = e instanceof BadHexError ? t('err.badHex') : e instanceof Error ? e.message : String(e)
+      note(t('dbg.error', { msg }))
     } finally {
       busy = false
     }
@@ -74,62 +76,62 @@
     ['E · ELK 07', '7E 07 04 01 00 01 FF 00 EF'],
   ]
 
-  const presets: Array<[string, string]> = [
-    ['apagar', '7E 04 04 00 00 00 FF 00 EF'],
-    ['vermelho app', '7E 07 05 03 FF 00 00 10 EF'],
-    ['vermelho hw', '7E 07 05 03 FF 00 00 0A EF'],
-    ['vermelho 00', '7E 00 05 03 FF 00 00 00 EF'],
-    ['brilho 100', '7E 04 01 64 FF FF FF 00 EF'],
+  const presets = $derived<Array<[string, string]>>([
+    [t('dbg.pOff'), '7E 04 04 00 00 00 FF 00 EF'],
+    [t('dbg.pRedApp'), '7E 07 05 03 FF 00 00 10 EF'],
+    [t('dbg.pRedHw'), '7E 07 05 03 FF 00 00 0A EF'],
+    [t('dbg.pRed00'), '7E 00 05 03 FF 00 00 00 EF'],
+    [t('dbg.pBright'), '7E 04 01 64 FF FF FF 00 EF'],
     ['login MELK 1', '7E 07 83'],
     ['login MELK 2', '7E 04 04'],
-    ['consultar', '7E 00 01 FA 00 00 00 00 EF'],
-  ]
+    [t('dbg.pQuery'), '7E 00 01 FA 00 00 00 00 EF'],
+  ])
 
   /**
    * LEDBLE-02 puts the output selector in byte 7: 0 = all, 1 = LED1, 2 = LED2.
    * If only part of the wiring reacts, the controller really is multi-output.
    */
-  const channelCandidates: Array<[string, string]> = [
-    ['CH0 · todos vermelho', '7E FF 05 03 FF 00 00 00 EF'],
-    ['CH1 · LED1 verde', '7E FF 05 03 00 FF 00 01 EF'],
-    ['CH2 · LED2 azul', '7E FF 05 03 00 00 FF 02 EF'],
-    ['CH3 · LED3? branco', '7E FF 05 03 FF FF FF 03 EF'],
-  ]
+  const channelCandidates = $derived<Array<[string, string]>>([
+    [t('dbg.ch0'), '7E FF 05 03 FF 00 00 00 EF'],
+    [t('dbg.ch1'), '7E FF 05 03 00 FF 00 01 EF'],
+    [t('dbg.ch2'), '7E FF 05 03 00 00 FF 02 EF'],
+    [t('dbg.ch3'), '7E FF 05 03 FF FF FF 03 EF'],
+  ])
 
   /** Static red is unmistakable, so it identifies the effect frame at a glance. */
-  const effectCandidates: Array<[string, string]> = [
-    ['F · efeito app', '7E 05 03 80 03 FF FF 00 EF'],
-    ['G · efeito hw', '7E 07 03 80 03 FF FF 00 EF'],
-    ['H · efeito 00', '7E 00 03 80 03 00 00 00 EF'],
-    ['I · efeito 06', '7E 05 03 80 06 FF FF 00 EF'],
-  ]
+  const effectCandidates = $derived<Array<[string, string]>>([
+    [t('dbg.fxApp'), '7E 05 03 80 03 FF FF 00 EF'],
+    [t('dbg.fxHw'), '7E 07 03 80 03 FF FF 00 EF'],
+    [t('dbg.fx00'), '7E 00 03 80 03 00 00 00 EF'],
+    [t('dbg.fx06'), '7E 05 03 80 06 FF FF 00 EF'],
+  ])
 
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
   /** Fire every candidate with a gap, so the one that works is visible. */
-  async function sweep(set = candidates, what = 'ligar') {
+  async function sweep(set = candidates, what = t('dbg.whatPower')) {
     if (!deviceId) return
     busy = true
-    note(`--- varredura ${what}: olhe a fita e anote qual letra reagiu ---`)
+    note(t('dbg.sweepStart', { what }))
     for (const [label, frame] of set) {
       try {
         await sendRaw(deviceId, parseHex(frame), charUuid || undefined)
         note(`${label}  →  ${frame}`)
       } catch (e) {
-        note(`${label}  ERRO: ${e instanceof Error ? e.message : String(e)}`)
+        note(`${label}  ${t('dbg.error', { msg: e instanceof Error ? e.message : String(e) })}`)
       }
       await wait(1500)
     }
-    note('--- fim da varredura ---')
+    note(t('dbg.sweepEnd'))
     busy = false
   }
 </script>
 
 <div class="col">
   <label class="field card">
-    <span>Aparelho</span>
+    <span>{t('dbg.device')}</span>
     <select bind:value={deviceId} class="sel">
-      <option value="">Escolha…</option>
+      <option value="">{t('dbg.choose')}</option>
       {#each list as c (c.id)}
         <option value={c.id}>{displayName(c)} — {c.state}</option>
       {/each}
@@ -137,7 +139,7 @@
   </label>
 
   <button class="primary" onclick={run} disabled={!deviceId || busy}>
-    Inspecionar GATT
+    {t('dbg.inspect')}
   </button>
 
   {#each services as s (s.uuid)}
@@ -149,14 +151,14 @@
           <span class="muted">{c.props.join(' ') || '—'}</span>
         </div>
       {:else}
-        <div class="small muted">sem características legíveis</div>
+        <div class="small muted">{t('dbg.noChars')}</div>
       {/each}
     </div>
   {/each}
 
   {#if writable.length}
     <label class="field card">
-      <span>Escrever em</span>
+      <span>{t('dbg.writeTo')}</span>
       <select bind:value={charUuid} class="sel">
         {#each writable as u}<option value={u}>{u}</option>{/each}
       </select>
@@ -165,18 +167,18 @@
 
   <div class="card col">
     <label class="field">
-      <span>Frame (hex)</span>
+      <span>{t('dbg.frame')}</span>
       <input type="text" bind:value={hex} style="font-family:ui-monospace,monospace" />
     </label>
-    <button class="primary" onclick={send} disabled={!deviceId || busy}>Enviar</button>
+    <button class="primary" onclick={send} disabled={!deviceId || busy}>{t('dbg.send')}</button>
     <button onclick={() => sweep()} disabled={!deviceId || busy}>
-      Varrer ligar (5 × 1,5 s)
+      {t('dbg.sweepPower')}
     </button>
-    <button onclick={() => sweep(effectCandidates, 'efeito')} disabled={!deviceId || busy}>
-      Varrer efeito → vermelho estático (4 × 1,5 s)
+    <button onclick={() => sweep(effectCandidates, t('dbg.whatEffect'))} disabled={!deviceId || busy}>
+      {t('dbg.sweepEffect')}
     </button>
-    <button onclick={() => sweep(channelCandidates, 'canais')} disabled={!deviceId || busy}>
-      Varrer canais — cor diferente por saída (4 × 1,5 s)
+    <button onclick={() => sweep(channelCandidates, t('dbg.whatChannels'))} disabled={!deviceId || busy}>
+      {t('dbg.sweepChannels')}
     </button>
     <div class="row wrap" style="gap:6px">
       {#each presets as [label, frame]}

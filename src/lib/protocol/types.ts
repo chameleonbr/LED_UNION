@@ -5,6 +5,10 @@ export type Caps = {
   speed: boolean
   effects: boolean
   scenes: boolean
+  /** Has a user-built colour sequence command. Lets the UI ask without building frames. */
+  custom: boolean
+  /** Has a sound sensitivity command in its own layout. */
+  sensitivity: boolean
 }
 
 export type Effect = { id: number; name: string; group?: string }
@@ -113,5 +117,7 @@ export type Driver = {
 export const clamp = (v: number, lo: number, hi: number) =>
   v < lo ? lo : v > hi ? hi : Math.round(v)
 
-export const pct = (v: number) => clamp(v, 0, 100)
-export const byte = (v: number) => clamp(v, 0, 255)
+// NaN would otherwise slip through clamp and land on the wire as 00 with no warning.
+const finite = (v: number) => (Number.isFinite(v) ? v : 0)
+export const pct = (v: number) => clamp(finite(v), 0, 100)
+export const byte = (v: number) => clamp(finite(v), 0, 255)

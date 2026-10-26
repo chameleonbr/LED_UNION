@@ -1,6 +1,6 @@
 import { WriteQueue } from './queue.ts'
 import { t } from './i18n.svelte.ts'
-export { parseHex, toHex } from './hex.ts'
+export { parseHex, toHex, BadHexError } from './hex.ts'
 import { epKey, parseEp } from './endpoint.ts'
 export { epKey, parseEp }
 import { allServices, driverFor, drivers, type Driver } from './protocol/index.ts'
@@ -202,7 +202,19 @@ async function resolveDriver(
   )
 }
 
-export async function connect(id: string): Promise<void> {
+// A scene or the Everything card can ask for the same offline device several times at
+// once; they all wait on one GATT connect instead of racing each other.
+const connecting = new Map<string, Promise<void>>()
+
+export function connect(id: string): Promise<void> {
+  const pending = connecting.get(id)
+  if (pending) return pending
+  const p = connectOnce(id).finally(() => connecting.delete(id))
+  connecting.set(id, p)
+  return p
+}
+
+async function connectOnce(id: string): Promise<void> {
   const l = live.get(id)
   const c = conns[id]
   if (!l || !c) throw new Error(t('err.notPairedAdd'))
