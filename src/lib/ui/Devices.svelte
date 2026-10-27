@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     conns, selection, addDevice, connect, connectOrRelink, disconnect, displayName, forget,
+    linked, relink,
   } from '../ble.svelte.ts'
   import {
     store, addGroup, removeGroup, renameDevice, renameEndpoint, labelOf,
@@ -83,10 +84,33 @@
     }
   }
 
+  // Devices this session has no handle to. Chrome allows one chooser per tap, so
+  // Connect all re-pairs them one at a time and says how many are left.
+  const missing = $derived(list.filter((c) => !linked(c.id)))
+
   async function connectAll() {
     busy = true
-    await Promise.allSettled(list.map((c) => connect(c.id)))
+    error = ''
+    // relink first, before any await: the chooser needs this tap's user activation.
+    const next = missing[0] && relink(missing[0].id).catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (!/cancel/i.test(msg)) error = msg
+    })
+    await Promise.allSettled([next, ...list.filter((c) => linked(c.id)).map((c) => connect(c.id))])
     busy = false
+  }
+
+  let help = $state(false)
+  let copied = $state(false)
+  const FLAG = 'chrome://flags/#enable-web-bluetooth-new-permissions-backend'
+
+  async function copyFlag() {
+    try {
+      await navigator.clipboard.writeText(FLAG)
+      copied = true
+    } catch {
+      // No clipboard permission: the address stays selectable in the field.
+    }
   }
 
   function saveGroup() {
@@ -100,11 +124,32 @@
 <div class="col">
   <div class="row wrap">
     <button class="primary" onclick={add} disabled={busy}>{t('devices.add')}</button>
-    <button onclick={connectAll} disabled={busy || list.length === 0}>{t('devices.connectAll')}</button>
+    <button onclick={connectAll} disabled={busy || list.length === 0}>
+      {missing.length ? t('devices.connectNext', { n: missing.length }) : t('devices.connectAll')}
+    </button>
     <button class="ghost" onclick={selectAll} disabled={list.length === 0}>
       {allSelected ? t('devices.clearSelection') : t('devices.selectAll')}
     </button>
+    <button class="ghost" onclick={() => (help = !help)} aria-expanded={help}>{t('help.button')}</button>
   </div>
+
+  {#if help}
+    <div class="card col">
+      <strong>{t('help.title')}</strong>
+      <div class="small muted">{t('help.why')}</div>
+      <ol class="small">
+        <li>{t('help.step1')}</li>
+        <li>{t('help.step2')}</li>
+        <li>{t('help.step3')}</li>
+      </ol>
+      <div class="row">
+        <input class="grow" type="text" readonly value={FLAG}
+               onfocus={(e) => e.currentTarget.select()} />
+        <button onclick={copyFlag}>{copied ? t('help.copied') : t('help.copy')}</button>
+      </div>
+      <div class="small muted">{t('help.after')}</div>
+    </div>
+  {/if}
 
   {#if error}
     <div class="card" style="border-color: var(--err); color: var(--err)">{error}</div>
