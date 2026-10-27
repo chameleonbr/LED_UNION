@@ -1,3 +1,4 @@
+import { SvelteMap } from 'svelte/reactivity'
 import { WriteQueue } from './queue.ts'
 import { t } from './i18n.svelte.ts'
 export { parseHex, toHex, BadHexError } from './hex.ts'
@@ -42,7 +43,11 @@ export const conns = $state<Record<string, Conn>>({})
 /** Which devices commands apply to. Empty means nothing is targeted. */
 export const selection = $state<{ ids: string[] }>({ ids: [] })
 
-const live = new Map<string, Live>()
+// Reactive so the UI can count devices this session can no longer reach.
+const live = new SvelteMap<string, Live>()
+
+/** Whether this session holds a handle to the device, i.e. connect() can work without the chooser. */
+export const linked = (id: string) => live.has(id)
 const connectedAt = new Map<string, number>()
 
 export const supported = () =>
