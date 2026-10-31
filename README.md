@@ -23,7 +23,7 @@ effect or scene in one go.
 | LEDLIKE | `FFE0` / `FFE1` | ✅ implemented (`70 … 0F`, white/CCT only) |
 | LEDPHO | `FFE0` / `FFE1` | ✅ implemented (`72 … 2F`, group-addressed) |
 | BLEDIM / LanQianTech | `FFF0` / **`FFF1`** | ✅ implemented (`55 AA`, variable length) |
-| iPixel Color (LED_BLE_* panels) | `00FA` / `FA02`, replies on `FA03` | 🧪 phase 1: power, brightness, rotation, show saved slot, panel size; not yet tested on hardware |
+| iPixel Color (LED_BLE_* panels) | `00FA` / `FA02`, replies on `FA03` | 🧪 power, brightness, rotation, slots, panel size (tested on a 32×32); phase 2: send images, GIFs and text (Panel tab, GIPHY search, Android share), not yet tested on hardware |
 
 Be clear about what "implemented" means here. The `ffe0` driver is **confirmed on real
 hardware** — connecting, the `2A` handshake and the colour command all work on an

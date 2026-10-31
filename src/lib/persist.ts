@@ -14,8 +14,11 @@ export type SavedDevice = {
    * channel in RGB mode, so the white control has to follow this.
    */
   channelMode?: number
-  /** What an LED panel reported about itself, plus the rotation the owner picked. */
-  panel?: PanelInfo & { orientation?: number }
+  /**
+   * What an LED panel reported about itself, plus the rotation the owner picked and the
+   * slot LED Union last uploaded to (the default for the next upload).
+   */
+  panel?: PanelInfo & { orientation?: number; mcu?: number; lastSlot?: number }
 }
 
 /** How an addressable strip is physically wired. */
@@ -87,6 +90,8 @@ export type Persisted = {
   locale?: string
   /** Present while stealth is on: what every light looked like before it went dark. */
   stealth?: { since: string; snapshot: Record<string, Look> }
+  /** The owner's own GIPHY API key; stays on this device. */
+  giphyKey?: string
 }
 
 export const seedColors = (): SavedColor[] =>

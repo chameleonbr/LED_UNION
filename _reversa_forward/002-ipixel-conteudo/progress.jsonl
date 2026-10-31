@@ -1,0 +1,28 @@
+{"ts": "2026-10-31T23:41:22Z", "action": "T001", "status": "done", "files": ["src/lib/protocol/types.ts", "src/lib/persist.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T002", "status": "done", "files": ["package.json", "package-lock.json", "src/lib/panel/gifenc.d.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T003", "status": "done", "files": ["src/lib/dict.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T004", "status": "done", "files": ["src/lib/protocol/ipixel-content.test.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T005", "status": "done", "files": ["src/lib/protocol/ipixel.test.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T006", "status": "done", "files": ["src/lib/panel/giphy.test.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T007", "status": "done", "files": ["src/lib/protocol/ipixel-content.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T008", "status": "done", "files": ["src/lib/protocol/ipixel.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T009", "status": "done", "files": ["src/lib/store.svelte.ts", "src/lib/ui/DeviceCard.svelte"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T010", "status": "done", "files": ["src/lib/ble.svelte.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T011", "status": "done", "files": ["src/lib/ble.svelte.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T012", "status": "done", "files": ["src/lib/panel/render.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T013", "status": "done", "files": ["src/lib/panel/library.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T014", "status": "done", "files": ["src/lib/panel/giphy.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T015", "status": "done", "files": ["public/share-target.js"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T016", "status": "done", "files": ["vite.config.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T017", "status": "done", "files": ["src/lib/ui/PanelEditor.svelte"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T018", "status": "done", "files": ["src/lib/ui/Panel.svelte"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T019", "status": "done", "files": ["src/lib/ui/Panel.svelte"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T020", "status": "done", "files": ["src/lib/ui/Panel.svelte", "src/App.svelte"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T021", "status": "done", "files": ["src/App.svelte"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T022", "status": "done", "files": ["src/lib/ui/Debug.svelte", "src/lib/panel/prefs.svelte.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T023", "status": "done", "files": []}
+{"ts": "2026-10-31T23:41:22Z", "action": "T024", "status": "done", "files": ["README.md", "README.pt-BR.md"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T006", "status": "corrected", "note": "setPanel merge not needed: HW info goes through new patchPanel (replaces setOrientation); no setPanel test added", "files": ["src/lib/store.svelte.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T009", "status": "corrected", "note": "implemented as patchPanel(id,{orientation|mcu|lastSlot}); setOrientation removed, DeviceCard updated", "files": ["src/lib/store.svelte.ts", "src/lib/ui/DeviceCard.svelte"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T011", "status": "corrected", "note": "review fix: ACK timeout starts after the window write; listener removal only by owner; failed write drops its listener", "files": ["src/lib/ble.svelte.ts"]}
+{"ts": "2026-10-31T23:41:22Z", "action": "T017", "status": "corrected", "note": "review fix: item saved before upload and on close; editor keyed per item", "files": ["src/lib/ui/PanelEditor.svelte", "src/lib/ui/Panel.svelte"]}

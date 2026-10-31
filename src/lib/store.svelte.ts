@@ -128,10 +128,11 @@ export function setPanel(id: string, info: PanelInfo) {
   save()
 }
 
-export function setOrientation(id: string, orientation: number) {
+/** Panel facts that do not come from the device-info reply. */
+export function patchPanel(id: string, patch: { orientation?: number; mcu?: number; lastSlot?: number }) {
   const d = store.devices.find((x) => x.id === id)
   if (!d) return
-  d.panel = { type: d.panel?.type ?? -1, ...d.panel, orientation }
+  d.panel = { type: d.panel?.type ?? -1, ...d.panel, ...patch }
   save()
 }
 

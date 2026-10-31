@@ -131,7 +131,8 @@ export type Driver = {
 /** What a panel says about itself. Size is absent when the type byte is not in the table. */
 export type PanelInfo = { type: number; width?: number; height?: number; locked?: boolean }
 
-export type DeviceReport = { panel?: PanelInfo }
+/** `mcu` is the firmware version as major*100 + minor (HW-info reply). */
+export type DeviceReport = { panel?: PanelInfo; mcu?: number }
 
 export const clamp = (v: number, lo: number, hi: number) =>
   v < lo ? lo : v > hi ? hi : Math.round(v)

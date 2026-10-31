@@ -24,7 +24,7 @@ efeito ou cena de uma vez.
 | LEDLIKE | `FFE0` / `FFE1` | ✅ implementado (`70 … 0F`, só branco/CCT) |
 | LEDPHO | `FFE0` / `FFE1` | ✅ implementado (`72 … 2F`, com endereço de grupo) |
 | BLEDIM / LanQianTech | `FFF0` / **`FFF1`** | ✅ implementado (`55 AA`, tam. variável) |
-| iPixel Color (painéis LED_BLE_*) | `00FA` / `FA02`, respostas em `FA03` | 🧪 fase 1: liga/desliga, brilho, rotação, mostrar slot salvo, tamanho do painel; ainda não testado em hardware |
+| iPixel Color (painéis LED_BLE_*) | `00FA` / `FA02`, respostas em `FA03` | 🧪 liga/desliga, brilho, rotação, slots, tamanho do painel (testado num 32×32); fase 2: enviar imagens, GIFs e texto (aba Painel, busca no GIPHY, compartilhar do Android), ainda não testado em hardware |
 
 Vale ser claro sobre o que "implementado" significa aqui. O driver `ffe0` está
 **confirmado em hardware real** — conexão, handshake `2A` e comando de cor funcionam

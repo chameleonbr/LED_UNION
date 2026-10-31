@@ -7,6 +7,7 @@
   import { store } from '../store.svelte.ts'
   import { traceLog, clearTrace, downloadTrace, type TraceEntry } from '../trace.ts'
   import { onMount } from 'svelte'
+  import { textPrefs } from '../panel/prefs.svelte.ts'
 
   let deviceId = $state('')
   let services = $state<ServiceInfo[]>([])
@@ -202,6 +203,11 @@
       {/each}
     </div>
   </div>
+
+  <label class="card row small" style="gap:6px">
+    <input type="checkbox" bind:checked={textPrefs.msbFirst} />
+    {t('debug.msbFirst')}
+  </label>
 
   <div class="card col" style="gap:6px">
     <div class="row spread">

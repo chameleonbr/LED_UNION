@@ -7,6 +7,7 @@ import { trace } from './trace.ts'
 import { epKey, parseEp } from './endpoint.ts'
 export { epKey, parseEp }
 import { allServices, driverFor, drivers, type Driver } from './protocol/index.ts'
+import { parseAck, windowSize, windows, type ContentKind } from './protocol/ipixel-content.ts'
 import {
   forgetDevice,
   lookOf,
@@ -15,6 +16,7 @@ import {
   save,
   setDriverId,
   setPanel,
+  patchPanel,
   store,
 } from './store.svelte.ts'
 
@@ -290,8 +292,10 @@ async function listen(id: string, server: BluetoothRemoteGATTServer, driver: Dri
         const data = new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
         lastNotify[id] = toHex(data)
         trace({ kind: 'notify', id, char: ch.uuid, hex: lastNotify[id] })
+        ackWaiters.get(id)?.(data)
         const report = conns[id]?.driver.onNotify?.(data)
         if (report?.panel) setPanel(id, report.panel)
+        if (report?.mcu !== undefined) patchPanel(id, { mcu: report.mcu })
       })
     }
     await ch.startNotifications()
@@ -406,18 +410,22 @@ async function writeOnce(
   }
 }
 
-async function writeRaw(l: Live, frame: Uint8Array, driver?: Driver, source?: string) {
+/**
+ * `brief` is for upload windows: up to 12 KB each, so the log keeps the header and the
+ * first bytes, and the chunks go back to back (write-with-response already paces them).
+ */
+async function writeRaw(l: Live, frame: Uint8Array, driver?: Driver, source?: string, brief = false) {
   const entry = {
     kind: 'write' as const,
     id: l.device.id,
     name: l.device.name,
     driver: driver?.id,
     char: l.char?.uuid,
-    hex: toHex(frame),
+    hex: brief && frame.length > 31 ? `${toHex(frame.subarray(0, 31))} … (${frame.length} B)` : toHex(frame),
     source,
   }
   try {
-    await writeFrame(l, frame, driver)
+    await writeFrame(l, frame, driver, brief ? 0 : undefined)
     trace({ ...entry, ok: true })
   } catch (e) {
     trace({ ...entry, ok: false, err: e instanceof Error ? e.message : String(e) })
@@ -425,7 +433,7 @@ async function writeRaw(l: Live, frame: Uint8Array, driver?: Driver, source?: st
   }
 }
 
-async function writeFrame(l: Live, frame: Uint8Array, driver?: Driver) {
+async function writeFrame(l: Live, frame: Uint8Array, driver?: Driver, gapMs = driver?.minGapMs ?? 30) {
   const char = l.char
   if (!char) throw new Error(t('err.notConnected'))
   const chunk = driver?.chunkSize
@@ -438,7 +446,7 @@ async function writeFrame(l: Live, frame: Uint8Array, driver?: Driver) {
   // Families with a fixed MTU assumption split the frame themselves and pace the
   // pieces; the gap is the only flow control they have.
   for (let i = 0; i < frame.length; i += chunk) {
-    if (i > 0) await sleep(driver?.minGapMs ?? 30)
+    if (i > 0 && gapMs) await sleep(gapMs)
     await writeOnce(char, frame.subarray(i, i + chunk), withResponse)
   }
 }
@@ -627,3 +635,106 @@ export async function sendRaw(
   await l.queue.push(() => writeRaw(l, frame, c.driver, 'debug'))
 }
 
+
+// --- content upload (LED panels) ------------------------------------------------------
+
+/** While an upload waits for its ACK, the device's notifications go here first. */
+const ackWaiters = new Map<string, (d: Uint8Array) => void>()
+
+export type UploadFailure = 'rejected' | 'full' | 'timeout' | 'cancelled'
+export class UploadError extends Error {
+  code: UploadFailure
+  constructor(code: UploadFailure) {
+    super(t(`upload.${code}`))
+    this.code = code
+  }
+}
+
+/**
+ * Catch the panel's answer to a write. Listening starts now, before the write, so a fast
+ * answer is not missed; the timeout only starts in `wait`, after the write has gone out:
+ * a 12 KB window can take seconds to write on its own.
+ */
+function listenFor(id: string, match: (d: Uint8Array) => boolean) {
+  let hit: Uint8Array | undefined
+  let wake: ((d: Uint8Array) => void) | undefined
+  const handler = (d: Uint8Array) => {
+    if (!match(d)) return
+    hit = d
+    wake?.(d)
+  }
+  ackWaiters.set(id, handler)
+  // Only remove our own: a stale listener must never unhook the next upload's.
+  const stop = () => {
+    if (ackWaiters.get(id) === handler) ackWaiters.delete(id)
+  }
+  const wait = (ms: number, signal?: AbortSignal) =>
+    new Promise<Uint8Array>((resolve, reject) => {
+      const finish = (err?: UploadError, d?: Uint8Array) => {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', abort)
+        stop()
+        if (err) reject(err)
+        else resolve(d!)
+      }
+      const abort = () => finish(new UploadError('cancelled'))
+      const timer = setTimeout(() => finish(new UploadError('timeout')), ms)
+      if (hit) return finish(undefined, hit)
+      if (signal?.aborted) return abort()
+      signal?.addEventListener('abort', abort)
+      wake = (d) => finish(undefined, d)
+    })
+  return { wait, stop }
+}
+
+/** Write, then wait for the matching answer; a failed write drops its listener. */
+async function writeAndWait(
+  l: Live, frame: Uint8Array, driver: Driver, source: string, brief: boolean,
+  match: (d: Uint8Array) => boolean, ms: number, signal?: AbortSignal,
+) {
+  const answer = listenFor(l.device.id, match)
+  try {
+    await writeRaw(l, frame, driver, source, brief)
+  } catch (e) {
+    answer.stop()
+    throw e
+  }
+  return answer.wait(ms, signal)
+}
+
+export type UploadOpts = {
+  onProgress?: (sent: number, total: number) => void
+  signal?: AbortSignal
+  source?: string
+}
+
+/**
+ * Store content in a panel slot. One queue op for the whole upload: windows are never
+ * coalesced or interleaved with other writes, and each waits for the panel's ACK.
+ */
+export async function upload(id: string, kind: ContentKind, slot: number, content: Uint8Array, opts: UploadOpts = {}) {
+  if (conns[id]?.state !== 'online') await connect(id)
+  const l = live.get(id)
+  const c = conns[id]
+  if (!l || !c?.driver.showSlot) throw new Error(t('err.notConnected'))
+  const panel = store.devices.find((d) => d.id === id)?.panel
+  const frames = windows(kind, slot, content, windowSize(panel))
+  const source = opts.source ?? `upload:${kind}`
+
+  await l.queue.push(async () => {
+    // Firmware 5+ wants the target slot selected first (ImageFragment.java:1867); an empty
+    // slot may not answer, so silence is fine here.
+    if ((panel?.mcu ?? 0) >= 500) {
+      const selected = (d: Uint8Array) => d.length === 5 && d[2] === 0x08 && d[3] === 0x80
+      await writeAndWait(l, c.driver.showSlot!(slot, c.name), c.driver, source, false, selected, 2000, opts.signal)
+        .catch((e: UploadError) => { if (e.code === 'cancelled') throw e })
+    }
+    for (const [i, frame] of frames.entries()) {
+      if (opts.signal?.aborted) throw new UploadError('cancelled')
+      const d = await writeAndWait(l, frame, c.driver, source, true, (d) => parseAck(d, kind) !== undefined, 6000, opts.signal)
+      const a = parseAck(d, kind)
+      if (a === 'rejected' || a === 'full') throw new UploadError(a)
+      opts.onProgress?.(i + 1, frames.length)
+    }
+  })
+}
