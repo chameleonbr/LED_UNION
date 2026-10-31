@@ -1,6 +1,6 @@
 <script lang="ts">
   import { applyTo, sendFrames, sendRaw, displayName, type Conn } from '../ble.svelte.ts'
-  import { lookOf, setLook, store, setStrip, setChannelMode, setOrientation } from '../store.svelte.ts'
+  import { lookOf, setLook, store, setStrip, setChannelMode, patchPanel } from '../store.svelte.ts'
   import type { CustomEffect } from '../store.svelte.ts'
   import type { Effect } from '../protocol/index.ts'
   import {
@@ -215,7 +215,7 @@
 
   async function rotate(v: number) {
     // Hardware fact: kept even if the write fails, like the strip wiring (BR-36).
-    setOrientation(conn.id, v)
+    patchPanel(conn.id, { orientation: v })
     await applyTo([dkey], (d, name) => d.orientation?.(v, name))
   }
 

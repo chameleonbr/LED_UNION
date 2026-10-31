@@ -22,6 +22,7 @@ export default defineConfig(({ command }) => ({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
+      workbox: { importScripts: ['share-target.js'] },
       manifest: {
         name: 'LED Union',
         short_name: 'LED Union',
@@ -33,6 +34,18 @@ export default defineConfig(({ command }) => ({
         // Relative, so it resolves against wherever the manifest is served from and
         // survives a change of base.
         start_url: './',
+        // Share → LED Union from any GIF app or site; public/share-target.js answers it.
+        share_target: {
+          action: './share',
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: {
+            title: 'title',
+            text: 'text',
+            url: 'url',
+            files: [{ name: 'media', accept: ['image/*'] }],
+          },
+        },
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },

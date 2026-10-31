@@ -40,6 +40,12 @@ export function parseDeviceInfo(d: Uint8Array): PanelInfo | undefined {
   }
 }
 
+/** HW-info reply `08 00 05 80 <major> <minor> …` → major*100 + minor (`OtaUpData.java`). */
+export function parseHwInfo(d: Uint8Array): number | undefined {
+  if (d.length < 6 || d[2] !== 0x05 || d[3] !== 0x80) return undefined
+  return d[4] * 100 + d[5]
+}
+
 const CAPS: Caps = {
   rgb: false, white: false, cct: false, speed: false, effects: false,
   scenes: false, custom: false, sensitivity: false,
@@ -55,16 +61,23 @@ export const ipixel: Driver = {
   // The vendor brightness slider sends at most every 100 ms.
   minGapMs: 100,
   writeWithResponse: true,
+  // The vendor app's 509 needs MTU 512, which the browser neither grants on request nor
+  // reports; 244 fits the common 247 and is what the reference clients use.
+  chunkSize: 244,
 
   matches: (name) => name.includes('LED_BLE'),
   caps: () => CAPS,
   effects: () => [],
 
-  // Device info doubles as the clock sync; lang 00 = not Chinese.
+  // Device info doubles as the clock sync; lang 00 = not Chinese. HW info gives the
+  // firmware version, which picks the text format.
   onConnect: (_name, now = new Date()) => [
     f(0x08, 0x00, 0x01, 0x80, now.getHours(), now.getMinutes(), now.getSeconds(), 0x00),
+    f(0x04, 0x00, 0x05, 0x80),
   ],
   onNotify: (d): DeviceReport | undefined => {
+    const mcu = parseHwInfo(d)
+    if (mcu !== undefined) return { mcu }
     const panel = parseDeviceInfo(d)
     return panel && { panel }
   },

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ipixel, parseDeviceInfo } from './ipixel.ts'
+import { ipixel, parseDeviceInfo, parseHwInfo } from './ipixel.ts'
 import { driverFor, allServices } from './index.ts'
 
 const hex = (u: Uint8Array) => [...u].map((b) => b.toString(16).padStart(2, '0')).join(' ')
@@ -38,8 +38,9 @@ test('ipixel show slot and delete all', () => {
 })
 
 test('ipixel device info query carries local time', () => {
-  const [q] = ipixel.onConnect!(N, new Date(2026, 9, 31, 21, 5, 9))
+  const [q, hw] = ipixel.onConnect!(N, new Date(2026, 9, 31, 21, 5, 9))
   assert.equal(hex(q), '08 00 01 80 15 05 09 00')
+  assert.equal(hex(hw), '04 00 05 80')
 })
 
 test('ipixel has no colour, speed or effect frames', () => {
@@ -65,4 +66,13 @@ test('unknown type keeps the type with no size', () => {
 test('an ack is not mistaken for device info', () => {
   assert.equal(parseDeviceInfo(new Uint8Array([0x05, 0x00, 0x08, 0x80, 0x01])), undefined)
   assert.equal(ipixel.onNotify!(new Uint8Array([0x05, 0x00, 0x08, 0x80, 0x01])), undefined)
+})
+
+test('hw info reply gives the firmware version, not a panel size', () => {
+  const d = new Uint8Array([0x08, 0, 0x05, 0x80, 18, 9, 0, 0])
+  assert.equal(parseHwInfo(d), 1809)
+  assert.deepEqual(ipixel.onNotify!(d), { mcu: 1809 })
+  // The device-info reply from the user's panel (trace 2026-10-31) is not HW info.
+  assert.equal(parseHwInfo(new Uint8Array([0x0a, 0, 0x01, 0x80, 0x81, 0x2d, 0xf4, 0x51, 0x58, 0x01])), undefined)
+  assert.equal(ipixel.chunkSize, 244)
 })

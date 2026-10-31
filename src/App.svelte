@@ -8,14 +8,17 @@
   import Effects from './lib/ui/Effects.svelte'
   import Scenes from './lib/ui/Scenes.svelte'
   import Debug from './lib/ui/Debug.svelte'
+  import Panel from './lib/ui/Panel.svelte'
 
-  type Tab = 'devices' | 'effects' | 'scenes' | 'debug'
-  let tab = $state<Tab>('devices')
+  type Tab = 'devices' | 'effects' | 'scenes' | 'panel' | 'debug'
+  // Arriving from the Android share sheet lands on the panel editor.
+  let tab = $state<Tab>(new URLSearchParams(location.search).has('share') ? 'panel' : 'devices')
 
   const tabs: Array<{ id: Tab; key: string }> = [
     { id: 'devices', key: 'nav.devices' },
     { id: 'effects', key: 'nav.effects' },
     { id: 'scenes', key: 'nav.scenes' },
+    { id: 'panel', key: 'nav.panel' },
     { id: 'debug', key: 'nav.debug' },
   ]
 
@@ -92,6 +95,8 @@
     <Effects />
   {:else if tab === 'scenes'}
     <Scenes />
+  {:else if tab === 'panel'}
+    <Panel />
   {:else}
     <Debug />
   {/if}
