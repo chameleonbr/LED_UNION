@@ -112,7 +112,26 @@ export type Driver = {
   white?(pct: number, name: string, variant?: string): Uint8Array
   /** warm/cool 0..100 */
   cct?(warm: number, cool: number, name: string, variant?: string): Uint8Array
+
+  /** Also offer devices whose name starts with this, for units that do not advertise the service. */
+  namePrefix?: string
+  /** Characteristic the family answers on. Only families that reply set it. */
+  notifyChar?: string
+  /** Decode one notification. Undefined when it carries nothing the app keeps. */
+  onNotify?(data: Uint8Array): DeviceReport | undefined
+
+  /** LED panels: show content already stored in a numbered slot. */
+  showSlot?(slot: number, name: string): Uint8Array
+  /** LED panels: rotate the picture, 0..3. */
+  orientation?(v: number, name: string): Uint8Array
+  /** LED panels: wipe every stored slot. */
+  deleteAll?(name: string): Uint8Array
 }
+
+/** What a panel says about itself. Size is absent when the type byte is not in the table. */
+export type PanelInfo = { type: number; width?: number; height?: number; locked?: boolean }
+
+export type DeviceReport = { panel?: PanelInfo }
 
 export const clamp = (v: number, lo: number, hi: number) =>
   v < lo ? lo : v > hi ? hi : Math.round(v)

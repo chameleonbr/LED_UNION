@@ -2,6 +2,8 @@
   import { onMount } from 'svelte'
   import { conns, restore, supported } from './lib/ble.svelte.ts'
   import { t, locale, locales, localeName, chooseLocale } from './lib/i18n.svelte.ts'
+  import { store } from './lib/store.svelte.ts'
+  import { enterStealth, exitStealth } from './lib/stealth.ts'
   import Devices from './lib/ui/Devices.svelte'
   import Effects from './lib/ui/Effects.svelte'
   import Scenes from './lib/ui/Scenes.svelte'
@@ -19,6 +21,25 @@
 
   const online = $derived(Object.values(conns).filter((c) => c.state === 'online').length)
 
+  let stealthBusy = $state(false)
+  let stealthMsg = $state('')
+
+  async function toggleStealth() {
+    if (stealthBusy) return
+    stealthBusy = true
+    stealthMsg = ''
+    try {
+      if (store.stealth) {
+        const missed = await exitStealth()
+        if (missed.length) stealthMsg = t('stealth.unreachable', { names: missed.join(', ') })
+      } else {
+        await enterStealth()
+      }
+    } finally {
+      stealthBusy = false
+    }
+  }
+
   function select(id: Tab) {
     tab = id
   }
@@ -32,6 +53,15 @@
     <strong>LED Union</strong>
     <div class="row" style="gap:10px">
       <span class="small muted">{t('app.online', { n: online })}</span>
+      <button
+        class="stealth"
+        class:on={!!store.stealth}
+        aria-pressed={!!store.stealth}
+        disabled={stealthBusy}
+        onclick={toggleStealth}
+      >
+        {store.stealth ? t('stealth.on') : t('stealth.off')}
+      </button>
       <select
         class="lang"
         value={locale()}
@@ -41,6 +71,7 @@
       </select>
     </div>
   </div>
+  {#if stealthMsg}<div class="small" style="color:var(--warn); margin-top:6px">{stealthMsg}</div>{/if}
 </header>
 
 <main>
@@ -82,6 +113,19 @@
     padding: 12px 16px;
     background: var(--bg);
     border-bottom: 1px solid var(--line);
+  }
+
+  .stealth {
+    min-height: 48px;
+    min-width: 48px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+
+  .stealth.on {
+    background: var(--err);
+    color: #fff;
+    font-weight: 700;
   }
 
   .lang {

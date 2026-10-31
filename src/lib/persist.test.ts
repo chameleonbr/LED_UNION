@@ -163,3 +163,30 @@ test('a device picked again under a new id keeps everything saved for it', () =>
   assert.deepEqual(s.groups[0].deviceIds, ['new#0', 'other'])
   assert.equal(s.scenes[0].entries[0].key, 'new#1')
 })
+
+test('panel info, panel looks and stealth survive a reload; old stores load without them', () => {
+  const saved = {
+    devices: [
+      { id: 'p', name: 'LED_BLE_1', driverId: 'ipixel', panel: { type: 0x81, width: 32, height: 32, orientation: 2 } },
+    ],
+    looks: { p: { power: true, panel: { kind: 'slot', slot: 3 } } },
+    stealth: { since: '2026-10-31T00:00:00Z', snapshot: { p: { power: true } } },
+  }
+  const s = migrate(JSON.parse(JSON.stringify(saved)))
+  assert.deepEqual(s.devices[0].panel, saved.devices[0].panel)
+  assert.deepEqual(s.looks.p.panel, { kind: 'slot', slot: 3 })
+  assert.deepEqual(s.stealth, saved.stealth)
+
+  const old = migrate({ devices: [{ id: 'a', name: 'BLEDIM', driverId: 'bledim' }] })
+  assert.equal(old.devices[0].panel, undefined)
+  assert.equal(old.stealth, undefined)
+
+  assert.equal(migrate({ stealth: { snapshot: 'bad' } }).stealth, undefined)
+})
+
+test('rekeying a device moves its stealth snapshot too', () => {
+  const s = empty()
+  s.stealth = { since: 'x', snapshot: { old: { power: true }, 'old#1': { power: false } } }
+  rekeyDevice(s, 'old', 'new')
+  assert.deepEqual(Object.keys(s.stealth.snapshot).sort(), ['new', 'new#1'])
+})

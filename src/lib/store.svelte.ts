@@ -14,6 +14,7 @@ import {
   type Scene,
   type StripConfig,
 } from './persist.ts'
+import type { PanelInfo } from './protocol/index.ts'
 
 export {
   seedColors,
@@ -103,7 +104,9 @@ export function forgetDevice(id: string) {
     g.deviceIds = g.deviceIds.filter((x) => x !== id && !x.startsWith(`${id}#`))
   }
   // Drop everything keyed to this device, including its outputs' looks.
-  for (const map of [store.looks, store.labels] as Array<Record<string, unknown>>) {
+  for (const map of [store.looks, store.labels, store.stealth?.snapshot ?? {}] as Array<
+    Record<string, unknown>
+  >) {
     for (const key of Object.keys(map)) {
       if (key === id || key.startsWith(`${id}#`)) delete map[key]
     }
@@ -113,6 +116,32 @@ export function forgetDevice(id: string) {
   }
   store.scenes = store.scenes.filter((s) => s.entries.length > 0)
   save()
+}
+
+/** Hardware facts a panel reported: saved whether or not anything else worked (BR-36). */
+export function setPanel(id: string, info: PanelInfo) {
+  const d = store.devices.find((x) => x.id === id)
+  if (!d) return
+  // A reply without a known size must not wipe a size an earlier reply gave.
+  const known = info.width === undefined && d.panel?.width !== undefined
+  d.panel = { ...d.panel!, ...(known ? { locked: info.locked } : info) }
+  save()
+}
+
+export function setOrientation(id: string, orientation: number) {
+  const d = store.devices.find((x) => x.id === id)
+  if (!d) return
+  d.panel = { type: d.panel?.type ?? -1, ...d.panel, orientation }
+  save()
+}
+
+/** The family a probe confirmed, so the next load shows the right controls before connecting. */
+export function setDriverId(id: string, driverId: string) {
+  const d = store.devices.find((x) => x.id === id)
+  if (d && d.driverId !== driverId) {
+    d.driverId = driverId
+    save()
+  }
 }
 
 // --- groups ------------------------------------------------------------------------
