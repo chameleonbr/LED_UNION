@@ -1,4 +1,4 @@
-import type { Effect } from './protocol/index.ts'
+import type { Effect, PanelInfo } from './protocol/index.ts'
 
 export type SavedDevice = {
   id: string
@@ -14,6 +14,8 @@ export type SavedDevice = {
    * channel in RGB mode, so the white control has to follow this.
    */
   channelMode?: number
+  /** What an LED panel reported about itself, plus the rotation the owner picked. */
+  panel?: PanelInfo & { orientation?: number }
 }
 
 /** How an addressable strip is physically wired. */
@@ -46,6 +48,8 @@ export type Look = {
   effect?: Effect
   /** Id of a CustomEffect, when a user-built sequence is what is playing. */
   customEffectId?: string
+  /** LED panels: the stored slot last put on screen. */
+  panel?: { kind: 'slot'; slot: number }
 }
 
 /** A colour in the palette. `key` marks a seeded one so its name can be translated. */
@@ -81,6 +85,8 @@ export type Persisted = {
   customEffects: CustomEffect[]
   /** Explicit language choice; absent means follow the browser. */
   locale?: string
+  /** Present while stealth is on: what every light looked like before it went dark. */
+  stealth?: { since: string; snapshot: Record<string, Look> }
 }
 
 export const seedColors = (): SavedColor[] =>
@@ -121,7 +127,9 @@ export function rekeyDevice(s: Persisted, from: string, to: string) {
   const old = s.devices.find((d) => d.id === from)
   s.devices = s.devices.filter((d) => d.id !== to)
   if (old) old.id = to
-  for (const map of [s.looks, s.labels] as Array<Record<string, unknown>>) {
+  for (const map of [s.looks, s.labels, s.stealth?.snapshot ?? {}] as Array<
+    Record<string, unknown>
+  >) {
     for (const k of Object.keys(map)) {
       const n = move(k)
       if (n !== k) {
@@ -151,6 +159,7 @@ export function migrate(raw: unknown): Persisted {
   const list = (v: unknown) => (Array.isArray(v) ? v : [])
   if (!isRecord(merged.looks)) merged.looks = {}
   if (!isRecord(merged.labels)) merged.labels = {}
+  if (merged.stealth && !isRecord(merged.stealth.snapshot)) merged.stealth = undefined
   merged.customEffects = list(merged.customEffects).filter(
     (e: any) => isRecord(e) && typeof e.id === 'string' && Array.isArray(e.colors),
   )

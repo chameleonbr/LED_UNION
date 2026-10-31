@@ -1,6 +1,6 @@
 <script lang="ts">
   import { applyTo, sendFrames, sendRaw, displayName, type Conn } from '../ble.svelte.ts'
-  import { lookOf, setLook, store, setStrip, setChannelMode } from '../store.svelte.ts'
+  import { lookOf, setLook, store, setStrip, setChannelMode, setOrientation } from '../store.svelte.ts'
   import type { CustomEffect } from '../store.svelte.ts'
   import type { Effect } from '../protocol/index.ts'
   import {
@@ -57,24 +57,24 @@
   // Every control writes the look after sending, so the card reflects the last command
   // even though the device never reports anything back.
   async function power(on: boolean) {
-    await applyTo([dkey], (d, n, c, v) => d.power(on, n, c, v))
+    if (!(await applyTo([dkey], (d, n, c, v) => d.power(on, n, c, v)))) return
     setLook(dkey, { power: on })
   }
 
   async function pickColor(hex: string) {
     const { r, g, b } = rgb(hex)
-    await applyTo([dkey], (d, n, c, v) => d.rgb(r, g, b, n, c, v), 'rgb')
+    if (!(await applyTo([dkey], (d, n, c, v) => d.rgb(r, g, b, n, c, v), 'rgb'))) return
     // A static colour replaces whatever effect was playing.
     setLook(dkey, { colorHex: hex, white: undefined, cct: undefined, effect: undefined, customEffectId: undefined })
   }
 
   async function setBrightness(v: number) {
-    await applyTo([dkey], (d, n, c, vr) => d.brightness(v, n, c, vr), 'brightness')
+    if (!(await applyTo([dkey], (d, n, c, vr) => d.brightness(v, n, c, vr), 'brightness'))) return
     setLook(dkey, { brightness: v })
   }
 
   async function setSpeed(v: number) {
-    await applyTo([dkey], (d, n, c, vr) => d.speed(v, n, c, vr), 'speed')
+    if (!(await applyTo([dkey], (d, n, c, vr) => d.speed(v, n, c, vr), 'speed'))) return
     setLook(dkey, { speed: v })
   }
 
@@ -86,17 +86,17 @@
    */
   async function setWhite(v: number) {
     if (hasRealWhite) {
-      await applyTo([dkey], (d, n, _c, vr) => d.white?.(v, n, vr), 'white')
+      if (!(await applyTo([dkey], (d, n, _c, vr) => d.white?.(v, n, vr), 'white'))) return
       setLook(dkey, { white: v, colorHex: undefined, cct: undefined, effect: undefined, customEffectId: undefined })
       return
     }
     const k = Math.round((v * 255) / 100)
-    await applyTo([dkey], (d, n, c, v) => d.rgb(k, k, k, n, c, v), 'rgb')
+    if (!(await applyTo([dkey], (d, n, c, v) => d.rgb(k, k, k, n, c, v), 'rgb'))) return
     const hex = `#${[k, k, k].map((x) => x.toString(16).padStart(2, '0')).join('')}`
     setLook(dkey, { colorHex: hex, white: undefined, cct: undefined, effect: undefined, customEffectId: undefined })
   }
   async function setCct(v: number) {
-    await applyTo([dkey], (d, n, _c, vr) => d.cct?.(v, 100 - v, n, vr), 'cct')
+    if (!(await applyTo([dkey], (d, n, _c, vr) => d.cct?.(v, 100 - v, n, vr), 'cct'))) return
     setLook(dkey, { cct: v, colorHex: undefined, white: undefined, effect: undefined, customEffectId: undefined })
   }
 
@@ -111,7 +111,7 @@
     if (kind === 'b') {
       const fx = builtIn[Number(rest)]
       if (!fx) return
-      await applyTo([dkey], (d, n, c, v) => d.effect(fx, n, c, v))
+      if (!(await applyTo([dkey], (d, n, c, v) => d.effect(fx, n, c, v)))) return
       setLook(dkey, { effect: fx, customEffectId: undefined })
     } else {
       const fx = store.customEffects.find((x) => x.id === rest)
@@ -123,7 +123,7 @@
   async function runCustom(fx: CustomEffect) {
     // sendFrames uses the non-coalescing queue: dropping a colour mid-upload would
     // leave the controller with a truncated sequence.
-    await sendFrames(dkey, (d, n, c, v) =>
+    const sent = await sendFrames(dkey, (d, n, c, v) =>
       d.customEffect?.(
         { colors: fx.colors.map(rgb), fade: fx.fade },
         n,
@@ -131,7 +131,8 @@
         v,
       ) ?? [],
     )
-    await applyTo([dkey], (d, n, c, v) => d.speed(fx.speed, n, c, v))
+    if (!sent) return
+    if (!(await applyTo([dkey], (d, n, c, v) => d.speed(fx.speed, n, c, v)))) return
     setLook(dkey, { customEffectId: fx.id, effect: undefined })
   }
 
@@ -201,6 +202,31 @@
     [4, '4CH · RGBW'],
   ] as const
 
+  // --- LED panel (iPixel) -------------------------------------------------------------
+  const isPanel = $derived(!!conn.driver.showSlot)
+  const panel = $derived(store.devices.find((d) => d.id === conn.id)?.panel)
+  let slot = $state(1)
+
+  async function showSlot() {
+    const n = Math.min(100, Math.max(1, Math.round(slot) || 1))
+    if (!(await applyTo([dkey], (d, name) => d.showSlot?.(n, name)))) return
+    setLook(dkey, { panel: { kind: 'slot', slot: n } })
+  }
+
+  async function rotate(v: number) {
+    // Hardware fact: kept even if the write fails, like the strip wiring (BR-36).
+    setOrientation(conn.id, v)
+    await applyTo([dkey], (d, name) => d.orientation?.(v, name))
+  }
+
+  async function deleteAll() {
+    if (!confirm(t('panel.deleteAllConfirm'))) return
+    await applyTo([dkey], (d, name) => d.deleteAll?.(name))
+  }
+
+  // Resend the device-info query; its reply carries the size.
+  const readPanel = () => sendFrames(dkey, (d, name) => d.onConnect?.(name) ?? [])
+
   // --- sound ------------------------------------------------------------------------
   const hasSound = $derived(!!conn.driver.soundMode || !!conn.driver.soundEnable)
   let showSound = $state(false)
@@ -223,7 +249,13 @@
         {#if look.colorHex}
           <span class="swatch" style:background={look.colorHex}></span>
         {/if}
-        <span class="truncate">{summary}</span>
+        <span class="truncate">
+          {isPanel
+            ? panel?.width
+              ? t('panel.size', { w: panel.width, h: panel.height ?? '?' })
+              : t('panel.unknown')
+            : summary}
+        </span>
         <span>{open ? '▲' : '▼'}</span>
       </span>
     </button>
@@ -249,6 +281,33 @@
       </label>
       <div class="small muted">{t('bledim.channelsHint')}</div>
       {#if modeMsg}<div class="small" style="color:var(--err)">{modeMsg}</div>{/if}
+    {/if}
+
+    {#if isPanel}
+      <div class="row small">
+        <span class="grow muted">
+          {panel?.width ? t('panel.size', { w: panel.width, h: panel.height ?? '?' }) : t('panel.unknown')}
+        </span>
+        {#if !panel?.width}
+          <button class="small" onclick={readPanel}>{t('panel.retry')}</button>
+        {/if}
+      </div>
+      {#if panel?.locked}<div class="small" style="color:var(--warn)">{t('panel.locked')}</div>{/if}
+      <div class="row">
+        <label class="field grow">
+          <span>{t('panel.slot')}{look.panel ? ` — ${look.panel.slot}` : ''}</span>
+          <input type="number" min="1" max="100" bind:value={slot} />
+        </label>
+        <button class="primary" onclick={showSlot}>{t('panel.show')}</button>
+      </div>
+      <label class="field">
+        <span>{t('panel.orientation')}</span>
+        <select class="sel" value={panel?.orientation ?? 0}
+                onchange={(e) => rotate(+(e.currentTarget as HTMLSelectElement).value)}>
+          {#each [0, 1, 2, 3] as v}<option value={v}>{v * 90}°</option>{/each}
+        </select>
+      </label>
+      <button class="ghost danger small" onclick={deleteAll}>{t('panel.deleteAll')}</button>
     {/if}
 
     {#if caps.rgb}

@@ -2,10 +2,21 @@ import { SvelteMap } from 'svelte/reactivity'
 import { WriteQueue } from './queue.ts'
 import { t } from './i18n.svelte.ts'
 export { parseHex, toHex, BadHexError } from './hex.ts'
+import { toHex } from './hex.ts'
+import { trace } from './trace.ts'
 import { epKey, parseEp } from './endpoint.ts'
 export { epKey, parseEp }
 import { allServices, driverFor, drivers, type Driver } from './protocol/index.ts'
-import { forgetDevice, rekey, rememberDevice, store } from './store.svelte.ts'
+import {
+  forgetDevice,
+  lookOf,
+  rekey,
+  rememberDevice,
+  save,
+  setDriverId,
+  setPanel,
+  store,
+} from './store.svelte.ts'
 
 /** What to show a human. Never pass this to a driver. */
 export const displayName = (c: { name: string; label?: string }) => c.label || c.name
@@ -56,9 +67,11 @@ export const supported = () =>
 // Re-adding or restoring the same device must not stack a second disconnect listener.
 const listening = new WeakSet<BluetoothDevice>()
 
-function track(device: BluetoothDevice, driver: Driver) {
+function track(device: BluetoothDevice, guess: Driver) {
   const name = device.name ?? t('devices.unnamed')
   const saved = store.devices.find((d) => d.id === device.id)
+  // A family the probe confirmed earlier beats a guess from the name.
+  const driver = drivers.find((d) => d.id === saved?.driverId) ?? guess
   conns[device.id] ??= { id: device.id, name, driver, state: 'offline' }
   Object.assign(conns[device.id], { name, label: saved?.label })
   if (!live.has(device.id)) {
@@ -68,6 +81,7 @@ function track(device: BluetoothDevice, driver: Driver) {
     listening.add(device)
     device.addEventListener('gattserverdisconnected', () => {
       const c = conns[device.id]
+      trace({ kind: 'disconnect', id: device.id, name: device.name })
       if (c) {
         c.state = 'offline'
         const up = connectedAt.get(device.id)
@@ -92,7 +106,9 @@ function track(device: BluetoothDevice, driver: Driver) {
 export async function restore(): Promise<void> {
   if (!supported()) return
   for (const d of store.devices) {
-    const driver = driverFor(d.name)
+    // The probe may have confirmed a different family than the name suggests (an iPixel
+    // advertises LED_BLE_xx like FFE0 controllers do), so the saved id wins.
+    const driver = drivers.find((x) => x.id === d.driverId) ?? driverFor(d.name)
     if (driver) {
       conns[d.id] ??= { id: d.id, name: d.name, label: d.label, driver, state: 'offline' }
     }
@@ -145,7 +161,11 @@ async function pickAndConnect(device: BluetoothDevice, savedId?: string) {
 /** Opens the browser's device chooser. One device per call, by design. */
 export async function addDevice(): Promise<Conn | undefined> {
   const device = await navigator.bluetooth.requestDevice({
-    filters: allServices.map((s) => ({ services: [s] })),
+    filters: [
+      ...allServices.map((s) => ({ services: [s] })),
+      // Some panels advertise only their name, not the service.
+      ...drivers.flatMap((d) => (d.namePrefix ? [{ namePrefix: d.namePrefix }] : [])),
+    ],
     optionalServices: allServices,
   })
   // A device already saved under another id is most likely this one coming back. Only
@@ -251,6 +271,36 @@ async function resolveDriver(
   )
 }
 
+/** Last notification per device, in hex, for the Debug screen. */
+export const lastNotify = $state<Record<string, string>>({})
+
+// A reconnect can hand back the same characteristic object; one listener is enough.
+const notifying = new WeakSet<BluetoothRemoteGATTCharacteristic>()
+
+async function listen(id: string, server: BluetoothRemoteGATTServer, driver: Driver) {
+  if (!driver.notifyChar) return
+  try {
+    const service = await server.getPrimaryService(driver.service)
+    const ch = await service.getCharacteristic(driver.notifyChar)
+    if (!notifying.has(ch)) {
+      notifying.add(ch)
+      ch.addEventListener('characteristicvaluechanged', () => {
+        const v = ch.value
+        if (!v) return
+        const data = new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
+        lastNotify[id] = toHex(data)
+        trace({ kind: 'notify', id, char: ch.uuid, hex: lastNotify[id] })
+        const report = conns[id]?.driver.onNotify?.(data)
+        if (report?.panel) setPanel(id, report.panel)
+      })
+    }
+    await ch.startNotifications()
+  } catch (e) {
+    // Commands still work without replies; only the panel size stays unknown.
+    trace({ kind: 'error', id, err: `notify: ${explain(e)}` })
+  }
+}
+
 // A scene or the Everything card can ask for the same offline device several times at
 // once; they all wait on one GATT connect instead of racing each other.
 const connecting = new Map<string, Promise<void>>()
@@ -279,15 +329,33 @@ async function connectOnce(id: string): Promise<void> {
       // Pacing is per-family, so the queue has to follow the driver.
       l.queue = new WriteQueue(resolved.driver.minGapMs)
     }
+    setDriverId(id, c.driver.id)
     l.char = resolved.char
     c.state = 'online'
+    trace({ kind: 'connect', id, name: c.name, driver: c.driver.id, char: l.char.uuid })
+    // Listen before the handshake: its reply is what tells the panel's size.
+    await listen(id, server, c.driver)
     // Some families ignore every command until they get a handshake frame.
     for (const frame of c.driver.onConnect?.(c.name) ?? []) {
-      await l.queue.push(() => writeRaw(l, frame, c.driver))
+      await l.queue.push(() => writeRaw(l, frame, c.driver, 'connect'))
+    }
+    // A light that wakes up during stealth must not be the one that gives the car away.
+    if (store.stealth) {
+      const outs: Array<{ ch?: number; variant?: string }> = c.driver.outputs?.(c.name) ?? []
+      const many = outs.length > 1
+      for (const [i, o] of (many ? outs : [{}]).entries()) {
+        // Joining late still means it gets its look back when stealth ends.
+        const key = many ? epKey(id, i) : id
+        store.stealth.snapshot[key] ??= JSON.parse(JSON.stringify(lookOf(key)))
+        const frame = c.driver.power(false, builderName(c), o.ch, o.variant)
+        await l.queue.push(() => writeRaw(l, frame, c.driver, 'stealth'))
+      }
+      save()
     }
   } catch (e) {
     c.state = 'error'
     c.error = explain(e)
+    trace({ kind: 'error', id, name: c.name, err: c.error })
     throw new Error(c.error)
   }
 }
@@ -338,7 +406,26 @@ async function writeOnce(
   }
 }
 
-async function writeRaw(l: Live, frame: Uint8Array, driver?: Driver) {
+async function writeRaw(l: Live, frame: Uint8Array, driver?: Driver, source?: string) {
+  const entry = {
+    kind: 'write' as const,
+    id: l.device.id,
+    name: l.device.name,
+    driver: driver?.id,
+    char: l.char?.uuid,
+    hex: toHex(frame),
+    source,
+  }
+  try {
+    await writeFrame(l, frame, driver)
+    trace({ ...entry, ok: true })
+  } catch (e) {
+    trace({ ...entry, ok: false, err: e instanceof Error ? e.message : String(e) })
+    throw e
+  }
+}
+
+async function writeFrame(l: Live, frame: Uint8Array, driver?: Driver) {
   const char = l.char
   if (!char) throw new Error(t('err.notConnected'))
   const chunk = driver?.chunkSize
@@ -367,6 +454,21 @@ export function outputAt(deviceId: string, index?: number) {
   return { ch: out?.ch, variant: out?.variant }
 }
 
+/** `force` skips the stealth check (stealth itself, its restore); `source` tags the log. */
+export type SendOpts = { force?: boolean; source?: string }
+
+/**
+ * While stealth is on, nothing lights up without the user saying so. Asking once and
+ * dropping stealth on yes means a dragged slider prompts a single time.
+ */
+export function leaveStealth(): boolean {
+  if (!store.stealth) return true
+  if (typeof confirm !== 'function' || !confirm(t('stealth.leave'))) return false
+  store.stealth = undefined
+  save()
+  return true
+}
+
 /**
  * Build a frame per device (drivers differ) and write it to everything selected.
  * `coalesceKey` marks a stream where only the newest value matters.
@@ -380,7 +482,10 @@ export async function applyTo(
     variant?: string,
   ) => Uint8Array | undefined,
   coalesceKey?: string,
-): Promise<void> {
+  opts?: SendOpts,
+): Promise<boolean> {
+  // False tells the caller nothing was sent, so it must not record a look (BR-30).
+  if (!opts?.force && !leaveStealth()) return false
   await Promise.allSettled(
     keys.map(async (key) => {
       const { deviceId, ch } = parseEp(key)
@@ -392,8 +497,9 @@ export async function applyTo(
         if (c.state !== 'online') await connect(deviceId)
         const o = outputAt(deviceId, ch)
         const frame = build(c.driver, builderName(c), o.ch, o.variant)
-        if (!frame) return
-        const op = () => writeRaw(l, frame, c.driver)
+        // Empty means the family has no such command (BR-21).
+        if (!frame?.length) return
+        const op = () => writeRaw(l, frame, c.driver, opts?.source ?? 'card')
         // Coalescing is per output, or two outputs would cancel each other out.
         await (coalesceKey
           ? l.queue.pushLatest(`${coalesceKey}:${ch ?? ''}`, op)
@@ -405,6 +511,7 @@ export async function applyTo(
       }
     }),
   )
+  return true
 }
 
 
@@ -418,7 +525,9 @@ export async function applyTo(
 export async function sendFrames(
   key: string,
   build: (driver: Driver, name: string, ch?: number, variant?: string) => Uint8Array[],
-): Promise<void> {
+  opts?: SendOpts,
+): Promise<boolean> {
+  if (!opts?.force && !leaveStealth()) return false
   const { deviceId, ch } = parseEp(key)
   const c = conns[deviceId]
   const l = live.get(deviceId)
@@ -428,13 +537,14 @@ export async function sendFrames(
   const o = outputAt(deviceId, ch)
   try {
     for (const frame of build(c.driver, builderName(c), o.ch, o.variant)) {
-      await l.queue.push(() => writeRaw(l, frame, c.driver))
+      await l.queue.push(() => writeRaw(l, frame, c.driver, opts?.source ?? 'card'))
     }
     c.error = undefined
   } catch (e) {
     if (c.state !== 'error') c.error = explain(e)
     throw new Error(c.error)
   }
+  return true
 }
 
 export type CharInfo = { uuid: string; props: string[] }
@@ -506,7 +616,7 @@ export async function sendRaw(
     for (const service of await server.getPrimaryServices()) {
       for (const ch of await service.getCharacteristics()) {
         if (ch.uuid === charUuid) {
-          await l.queue.push(() => writeRaw({ ...l, char: ch }, frame, c.driver))
+          await l.queue.push(() => writeRaw({ ...l, char: ch }, frame, c.driver, 'debug'))
           return
         }
       }
@@ -514,6 +624,6 @@ export async function sendRaw(
     throw new Error(t('err.charNotFound', { uuid: charUuid }))
   }
   if (c.state !== 'online') await connect(id)
-  await l.queue.push(() => writeRaw(l, frame, c.driver))
+  await l.queue.push(() => writeRaw(l, frame, c.driver, 'debug'))
 }
 

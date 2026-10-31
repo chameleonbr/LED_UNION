@@ -1,9 +1,12 @@
 <script lang="ts">
   import {
-    conns, inspect, sendRaw, parseHex, displayName, BadHexError,
+    conns, inspect, sendRaw, parseHex, displayName, BadHexError, lastNotify,
     type ServiceInfo,
   } from '../ble.svelte.ts'
   import { t } from '../i18n.svelte.ts'
+  import { store } from '../store.svelte.ts'
+  import { traceLog, clearTrace, downloadTrace, type TraceEntry } from '../trace.ts'
+  import { onMount } from 'svelte'
 
   let deviceId = $state('')
   let services = $state<ServiceInfo[]>([])
@@ -20,6 +23,17 @@
         .map((c) => c.uuid),
     ),
   )
+
+  // The log lives outside Svelte state so writes stay cheap; this view polls it.
+  let recording = $state(traceLog.on)
+  let recent = $state<TraceEntry[]>([])
+  const refresh = () => (recent = traceLog.entries.slice(-100).reverse())
+  onMount(() => {
+    refresh()
+    const timer = setInterval(refresh, 1000)
+    return () => clearInterval(timer)
+  })
+  const nameOf = (id: string) => (conns[id] ? displayName(conns[id]) : id.slice(0, 6))
 
   function note(msg: string) {
     log = [`${new Date().toLocaleTimeString()}  ${msg}`, ...log].slice(0, 40)
@@ -189,6 +203,37 @@
     </div>
   </div>
 
+  <div class="card col" style="gap:6px">
+    <div class="row spread">
+      <b>{t('trace.title')} ({traceLog.entries.length})</b>
+      <label class="row small" style="gap:4px">
+        <input type="checkbox" bind:checked={recording}
+               onchange={() => (traceLog.on = recording)} />
+        {t('trace.record')}
+      </label>
+    </div>
+    <div class="row">
+      <button class="primary small grow" onclick={() => downloadTrace(store.devices)}>
+        {t('trace.download')}
+      </button>
+      <button class="small grow" onclick={() => { clearTrace(); refresh() }}>
+        {t('trace.clear')}
+      </button>
+    </div>
+    {#each Object.entries(lastNotify) as [id, h] (id)}
+      <div class="small mono">⇠ {nameOf(id)}: {h}</div>
+    {/each}
+    {#if recent.length === 0}
+      <div class="small muted">{t('trace.empty')}</div>
+    {/if}
+    {#each recent as e, i (i)}
+      <div class="small mono" class:err={e.ok === false || e.kind === 'error'}>
+        {e.t.slice(11, 23)} {e.kind === 'write' ? '⇢' : e.kind === 'notify' ? '⇠' : '•'}
+        {nameOf(e.id)} {e.source ?? ''} {e.hex ?? e.kind} {e.err ?? ''}
+      </div>
+    {/each}
+  </div>
+
   {#if log.length}
     <div class="card col" style="gap:4px">
       {#each log as line}
@@ -199,6 +244,16 @@
 </div>
 
 <style>
+  .mono {
+    font-family: ui-monospace, monospace;
+    color: var(--muted);
+    word-break: break-all;
+  }
+
+  .err {
+    color: var(--err);
+  }
+
   .sel {
     min-height: var(--tap);
     border-radius: var(--radius);
