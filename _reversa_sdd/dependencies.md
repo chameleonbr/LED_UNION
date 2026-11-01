@@ -23,3 +23,6 @@ No runtime `dependencies` — everything is dev/build-time; shipped bundle = com
 ## Platform dependencies
 - Browser with Web Bluetooth (Chromium-based; secure context / HTTPS)
 - GitHub Pages hosting
+
+## Re-extraction 2026-11-01
+- `gifenc` 1.0.3 (MIT) — GIF encoder for panel uploads (`src/lib/panel/render.ts`).

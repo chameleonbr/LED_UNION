@@ -17,7 +17,17 @@
 
 ## Re-extraction history
 
-_(empty — filled by `/reversa` on the next extraction)_
+### Re-extraction 2026-11-01 13:00
+
+| ID | Verdict | Note |
+|----|---------|------|
+| W001 | 🟢 green | `_reversa_sdd/domain.md#BR-02` names persisted `driverId` preferred on reload |
+| W002 | 🟢 green | `domain.md#BR-12` includes the stealth gate (`leaveStealth` in `applyTo`/`sendFrames`) |
+| W003 | 🟢 green | `domain.md#BR-30` lists panel size/mcu read-back as facts, looks still "what was sent" |
+| W004 | 🟢 green | `domain.md#BR-33` order ends with panel slot (`look.ts#applyLook`) |
+| W005 | 🟢 green | `domain.md#BR-35` lists stealth snapshot entries (`store.svelte.ts#forgetDevice`) |
+| W006 | 🟢 green | `domain.md#BR-04` order `bledim, fff0, ffe0, ipixel`; `driverFor('LED_BLE_00203032')` = ffe0 |
+| W007 | 🟢 green | emitter md5 `98622b8733585ad72d2b82a0aa7767e0` re-computed 2026-11-01 |
 
 ## Archived
 

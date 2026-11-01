@@ -127,3 +127,13 @@ Scenario: Channel sweep identifies the outputs
 | `src/lib/ui/Debug.svelte` | `run`, `send`, `sweep`, `note`, `candidates`, `presets`, `channelCandidates`, `effectCandidates`, `writable` | 🟢 |
 | `src/lib/ble.svelte.ts` | `inspect`, `sendRaw`, `propsOf`, `CharInfo`, `ServiceInfo` | 🟢 |
 | `src/lib/hex.ts` | `parseHex`, `toHex` | 🟢 |
+
+## Re-extraction 2026-11-01 (`374da11..56af9f9`)
+
+> Delta from features 001 (iPixel phase 1, stealth, trace), 002 (panel content) and PR #6. Earlier sections above are unchanged unless noted here.
+
+| ID | Requirement | Priority | Acceptance criterion |
+|----|-------------|----------|---------------------|
+| RF-11 | 🟢 Command trace: every write/notify/connect/disconnect/error with source tag, ring 2000, flushed ≤ 1/s to `led-union/trace`; view, clear, download JSON (BR-73) | Must | `trace.test.ts`; download contains `upload:png` entries |
+| RF-12 | 🟢 Upload chunks traced in brief form (31 B + `… (N B)`); GIPHY key never traced | Must | Trace of a GIF upload has no full payload |
+| RF-13 | 🟢 Debug switch "text bits MSB-first" (`textPrefs.msbFirst`, not persisted) | Could | Off by default; LSB-first confirmed on mcu 317 |

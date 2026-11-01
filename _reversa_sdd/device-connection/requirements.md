@@ -136,3 +136,14 @@ Scenario: Forget is permanent
 | `src/lib/ui/Devices.svelte` | `add`, `connectAll`, connect / disconnect / forget buttons | 🟢 |
 | `src/App.svelte` | `onMount(restore)`, unsupported banner | 🟢 |
 | `src/lib/protocol/index.ts` | `drivers`, `driverFor`, `allServices` | 🟢 (consumed) |
+
+## Re-extraction 2026-11-01 (`374da11..56af9f9`)
+
+> Delta from features 001 (iPixel phase 1, stealth, trace), 002 (panel content) and PR #6. Earlier sections above are unchanged unless noted here.
+
+| ID | Requirement | Priority | Acceptance criterion |
+|----|-------------|----------|---------------------|
+| RF-15 | 🟢 The probe-confirmed `driverId` is saved and preferred over the name guess on `track`/`restore` (BR-02) | Must | An iPixel named `LED_BLE_xx` reloads as `ipixel`, not `ffe0` |
+| RF-16 | 🟢 `listen` enables notifications on every notify/indicate char of the resolved service **before** `onConnect`; replies go to `driver.onNotify` and to the device's ACK waiter | Must | iPixel connect logs `0A 00 01 80 81 …` and saves 32×32 |
+| RF-17 | 🟢 On "no longer in range" `connectGatt` waits ≤ 6 s for one advertisement (`watchAdvertisements`) and retries; unsupported → old behaviour | Must | After reopening the app the panel connects without re-adding (confirmed on Android 2026-11-01) |
+| RF-18 | 🟢 A device that connects while stealth is on is powered off and its look joins the snapshot (BR-70) | Must | Connect during stealth → `power off` write tagged `stealth` |

@@ -24,7 +24,7 @@ efeito ou cena de uma vez.
 | LEDLIKE | `FFE0` / `FFE1` | ✅ implementado (`70 … 0F`, só branco/CCT) |
 | LEDPHO | `FFE0` / `FFE1` | ✅ implementado (`72 … 2F`, com endereço de grupo) |
 | BLEDIM / LanQianTech | `FFF0` / **`FFF1`** | ✅ implementado (`55 AA`, tam. variável) |
-| iPixel Color (painéis LED_BLE_*) | `00FA` / `FA02`, respostas em `FA03` | 🧪 liga/desliga, brilho, rotação, slots, tamanho do painel (testado num 32×32); fase 2: enviar imagens, GIFs e texto (aba Painel, busca no GIPHY, compartilhar do Android), ainda não testado em hardware |
+| iPixel Color (painéis LED_BLE_*) | `00FA` / `FA02`, respostas em `FA03` | 🧪 liga/desliga, brilho, rotação, slots, tamanho do painel (testado num 32×32); fase 2: enviar imagens, GIFs e texto (aba Painel, busca no GIPHY, compartilhar do Android) — testado em hardware, exceto o compartilhar |
 
 Vale ser claro sobre o que "implementado" significa aqui. O driver `ffe0` está
 **confirmado em hardware real** — conexão, handshake `2A` e comando de cor funcionam
@@ -35,6 +35,18 @@ mas nunca foram testadas num aparelho.
 **Em aberto:** o controlador testado alimenta várias saídas físicas (fita, maçaneta,
 soleira) e o frame de cor padrão só atinge uma delas. Ver a seção de canais em
 [`docs/protocol-pt-br/ledble.md`](docs/protocol-pt-br/ledble.md).
+
+## Modo movimento
+
+A aba **Movimento** controla as luzes pelos sensores do celular enquanto você dirige: o
+brilho ou a cor acompanham a velocidade do GPS, uma freada forte pisca tudo em vermelho,
+curva ou arrancada forte disparam uma cor, uma cena ou um slot do painel, e chegar ou
+sair de um lugar salvo aplica uma ação. **Parar** devolve cada luz ao que estava. Debug →
+*Simular trajeto* testa as regras com o carro parado.
+
+Só funciona com o LED Union na tela: o Chrome para o sensor de movimento e o GPS com a
+página escondida ou o celular bloqueado. A *Tela escura* mantém a página aberta com o
+display preto. A posição ao vivo nunca é salva; os lugares salvos ficam só no celular.
 
 ## Deploy
 

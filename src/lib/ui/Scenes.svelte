@@ -1,6 +1,6 @@
 <script lang="ts">
   import { leaveStealth } from '../ble.svelte.ts'
-  import { applyLook } from '../look.ts'
+  import { applyScene } from '../look.ts'
   import { store, removeScene, type Scene } from '../store.svelte.ts'
   import { t } from '../i18n.svelte.ts'
 
@@ -22,9 +22,7 @@
     running = [...running, s.id]
     error = ''
     try {
-      for (const entry of s.entries) {
-        await applyLook(entry.key, entry.look, { force: true, source: `scene:${s.name}` })
-      }
+      await applyScene(s)
     } catch (e) {
       error = e instanceof Error ? e.message : String(e)
     } finally {

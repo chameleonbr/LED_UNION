@@ -1,0 +1,24 @@
+{"ts": "2026-11-01T15:30:00Z", "action": "T001", "status": "done", "files": ["src/lib/persist.ts"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T002", "status": "done", "files": ["src/lib/dict.ts"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T003", "status": "done", "files": ["src/lib/look.ts", "src/lib/ui/Scenes.svelte"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T004", "status": "done", "files": ["src/lib/persist.test.ts"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T005", "status": "done", "files": ["src/lib/motion/engine.test.ts"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T006", "status": "done", "files": ["src/lib/motion/engine.ts"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T007", "status": "done", "files": ["src/lib/motion/engine.ts"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T008", "status": "done", "files": ["src/lib/motion/engine.ts"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T009", "status": "done", "files": ["src/lib/motion/engine.ts"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T010", "status": "done", "files": ["src/lib/motion/run.ts"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T011", "status": "done", "files": ["src/lib/motion/run.ts"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T012", "status": "done", "files": ["src/lib/motion/sensors.svelte.ts"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T013", "status": "done", "files": ["src/lib/store.svelte.ts", "src/lib/persist.ts"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T014", "status": "done", "files": ["src/lib/ui/Debug.svelte"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T015", "status": "done", "files": ["src/lib/ui/Motion.svelte", "src/App.svelte"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T016", "status": "done", "files": ["src/lib/ui/MotionRuleEditor.svelte", "src/lib/ui/Motion.svelte"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T017", "status": "done", "files": ["src/lib/ui/Motion.svelte"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T018", "status": "done", "files": ["src/lib/ui/Motion.svelte"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T019", "status": "done", "files": ["README.md", "README.pt-BR.md"]}
+{"ts": "2026-11-01T15:30:00Z", "action": "T020", "status": "done", "files": ["_reversa_forward/003-motion-mode/legacy-impact.md", "_reversa_forward/003-motion-mode/regression-watch.md"]}
+{"ts": "2026-11-01T15:40:00Z", "action": "T004", "status": "corrected", "note": "forgetDevice lives in the runes store; the prune was moved to pure persist.dropMotionTargets and tested there (plus rekey)."}
+{"ts": "2026-11-01T15:40:00Z", "action": "T010", "status": "corrected", "note": "Review fixes: no output unless running (calibrate while stopped wrote to lights); stealth checked on every flash step and timed revert; failed-write counter added; warning for flash targets without a recorded colour (they end dark)."}
+{"ts": "2026-11-01T15:40:00Z", "action": "T015", "status": "corrected", "note": "Nav grid 4\u21923 columns (6 tabs, 2 rows); main bottom padding 80\u2192130 px so the last control is not under the nav."}
+{"ts": "2026-11-01T15:40:00Z", "action": "T012", "status": "corrected", "note": "Auto-calibration from the first 30 samples after Start when none is saved. No unit test for the !running guard: sensors.svelte.ts needs runes + browser APIs."}

@@ -148,3 +148,13 @@ Scenario: Channel mode is saved even if the send fails
 | `src/lib/ui/Effects.svelte` | `logicals`, `allColor`, `allBrightness`, `allPower` | 🟢 |
 | `src/lib/ui/ColorSelect.svelte` | `pick`, `open`, `cancel`, `create` | 🟢 |
 | `src/lib/protocol/types.ts` | `Driver`, `Caps`, `DriverOutput`, `clamp`, `pct`, `byte` | 🟢 |
+
+## Re-extraction 2026-11-01 (`374da11..56af9f9`)
+
+> Delta from features 001 (iPixel phase 1, stealth, trace), 002 (panel content) and PR #6. Earlier sections above are unchanged unless noted here.
+
+| ID | Requirement | Priority | Acceptance criterion |
+|----|-------------|----------|---------------------|
+| RF-20 | 🟢 Every command passes the stealth gate: while stealth is on the user is asked once to leave; "no" sends and records nothing (BR-71) | Must | Drag a slider in stealth → one confirm; cancel → no write in trace |
+| RF-21 | 🟢 Stealth toggle: `enterStealth` snapshots online endpoints, powers them off (force) and records `power:false`; `exitStealth` replays snapshots (missing power = on) and lists unreachable devices (BR-70, BR-72) | Must | Enter/exit restores colour and effect |
+| RF-22 | 🟢 iPixel card: brightness, slot buttons (`showSlot`, look `panel.slot`), orientation (`patchPanel`), delete all | Must | Slot tap on a filled slot switches the panel (hardware 2026-11-01) |

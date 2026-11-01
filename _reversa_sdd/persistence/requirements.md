@@ -122,3 +122,14 @@ Scenario: Forget cascades
 | `src/lib/persist.ts` | `SavedDevice`, `StripConfig`, `Group`, `Look`, `SavedColor`, `CustomEffect`, `Scene`, `Persisted`, `seedColors`, `KEY`, `LEGACY_KEY`, `empty`, `migrate` | 🟢 |
 | `src/lib/store.svelte.ts` | `load`, `store`, `save`, `uid`, `rememberDevice`, `renameDevice`, `setChannelMode`, `setStrip`, `labelOf`, `renameEndpoint`, `forgetDevice`, `addGroup`, `removeGroup`, `lookOf`, `setLook`, `addColor`, `removeColor`, `resetColors`, custom-effect CRUD, `addScene`, `removeScene`, `setLocale` | 🟢 |
 | `src/lib/persist.test.ts` | 7 tests (seed, legacy install, output migration, scene drop, re-seed, garbage, fresh array) | 🟢 |
+
+## Re-extraction 2026-11-01 (`374da11..56af9f9`)
+
+> Delta from features 001 (iPixel phase 1, stealth, trace), 002 (panel content) and PR #6. Earlier sections above are unchanged unless noted here.
+
+| ID | Requirement | Priority | Acceptance criterion |
+|----|-------------|----------|---------------------|
+| RF-15 | 🟢 `SavedDevice.panel` (`PanelInfo` + orientation, mcu, lastSlot) via `patchPanel`; `Look.panel = {kind:'slot', slot}` | Must | Reload keeps 32×32 and last slot |
+| RF-16 | 🟢 `store.stealth` persisted; migrate drops it when `snapshot` is not a record; `forgetDevice` prunes snapshot entries (BR-35) | Must | `persist.test.ts` |
+| RF-17 | 🟢 `giphyKey` in `Persisted`, removable from the Panel tab | Must | Remove key → field absent |
+| RF-18 | 🟢 Separate stores: trace in `led-union/trace`, panel library in IndexedDB `led-union-items`, pending share in Cache `led-union-share`; any failure is non-blocking (BR-38) | Must | Private mode still sends |

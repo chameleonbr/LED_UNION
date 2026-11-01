@@ -8,6 +8,7 @@
   import { traceLog, clearTrace, downloadTrace, type TraceEntry } from '../trace.ts'
   import { onMount } from 'svelte'
   import { textPrefs } from '../panel/prefs.svelte.ts'
+  import { live, simulate } from '../motion/sensors.svelte.ts'
 
   let deviceId = $state('')
   let services = $state<ServiceInfo[]>([])
@@ -203,6 +204,10 @@
       {/each}
     </div>
   </div>
+
+  <button class="card" disabled={live.running} onclick={simulate}>
+    {live.simulating ? t('motion.simulating') : t('motion.simulate')}
+  </button>
 
   <label class="card row small" style="gap:6px">
     <input type="checkbox" bind:checked={textPrefs.msbFirst} />

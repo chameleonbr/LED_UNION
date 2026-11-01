@@ -4,7 +4,7 @@
     linked, relink,
   } from '../ble.svelte.ts'
   import {
-    store, addGroup, removeGroup, renameDevice, renameEndpoint, labelOf,
+    store, addGroup, removeGroup, renameDevice, renameEndpoint, labelOf, lookOf,
   } from '../store.svelte.ts'
   import { epKey, parseEp } from '../endpoint.ts'
   import { t } from '../i18n.svelte.ts'
@@ -20,6 +20,10 @@
     const outs = outputsOf(c)
     return outs.length ? outs.map((_, i) => epKey(c.id, i)) : [c.id]
   }
+
+  /** The colour last sent to the first lit one of these lights; unlit when off or unknown. */
+  const railOf = (keys: string[]) =>
+    keys.map(lookOf).find((l) => l.power !== false && l.colorHex)?.colorHex
 
   let editing = $state('')
   let draft = $state('')
@@ -164,7 +168,8 @@
   {#each list as c (c.id)}
     {@const outs = outputsOf(c)}
     {@const selected = keysOf(c).some((k) => selection.ids.includes(k))}
-    <div class="card row" style:border-color={selected ? 'var(--accent)' : undefined}>
+    <div class="card row lit" style:border-color={selected ? 'var(--accent)' : undefined}
+         style:--rail={railOf(outs.length ? keysOf(c) : [c.id])}>
       {#if !outs.length}
         <input type="checkbox" checked={selection.ids.includes(c.id)}
                onchange={() => toggle(c.id)} />
@@ -208,7 +213,8 @@
       <div class="outputs">
         {#each outs as o, i (i)}
           {@const key = epKey(c.id, i)}
-          <div class="card row" style:border-color={selection.ids.includes(key) ? 'var(--accent)' : undefined}>
+          <div class="card row lit" style:border-color={selection.ids.includes(key) ? 'var(--accent)' : undefined}
+               style:--rail={railOf([key])}>
             <input type="checkbox" checked={selection.ids.includes(key)}
                    onchange={() => toggle(key)} />
             {#if editingOut === key}
