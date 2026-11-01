@@ -212,10 +212,31 @@ async function connectGatt(device: BluetoothDevice): Promise<BluetoothRemoteGATT
     } catch (e) {
       last = e
       if (device.gatt?.connected) device.gatt.disconnect()
+      // A handle from getDevices() is "out of range" until Chrome hears the device
+      // advertise again this session; waiting for that beats re-adding it.
+      if (/no longer in range/i.test(String(e)) && (await heardAdvert(device))) continue
       await sleep(400 * (attempt + 1))
     }
   }
   throw last
+}
+
+/** Wait up to `ms` for one advertisement from the device. False when unsupported or silent. */
+async function heardAdvert(device: BluetoothDevice, ms = 6000): Promise<boolean> {
+  if (!device.watchAdvertisements) return false
+  const stop = new AbortController()
+  try {
+    const heard = new Promise<boolean>((resolve) => {
+      device.addEventListener('advertisementreceived', () => resolve(true), { once: true, signal: stop.signal })
+      setTimeout(() => resolve(false), ms)
+    })
+    await device.watchAdvertisements({ signal: stop.signal })
+    return await heard
+  } catch {
+    return false
+  } finally {
+    stop.abort()
+  }
 }
 
 /** Turn a DOMException into something that says what to actually do about it. */
