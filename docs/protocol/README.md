@@ -8,6 +8,8 @@ derived from decompiling the original Android apps.
 | [`ledble.md`](ledble.md) | LEDBLE, LEDDMX, LEDCAR, LEDSMART, LEDSUN, LEDLIKE, LEDPHO — service `FFE0` |
 | [`elk-melk.md`](elk-melk.md) | ELK, XSL, CLK, MELK — service `FFF0`, characteristic `FFF3` |
 | [`bledim.md`](bledim.md) | BLEDIM, LanQianTech — service `FFF0`, characteristic `FFF1` |
+| [`magiclight.md`](magiclight.md) | Magic Light (LEDBLE, LEDBlue, FluxBlue…) — service `FFE5`, characteristic `FFE9` |
+| [`zengge.md`](zengge.md) | ZENGGE LEDnetWF — service `FFFF`, characteristic `FF01` |
 | [`variants.md`](variants.md) | cross-check against the `elkbledom` project |
 
 Portuguese translations live in [`../protocol-pt-br/`](../protocol-pt-br/).

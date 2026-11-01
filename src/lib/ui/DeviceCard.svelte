@@ -33,8 +33,10 @@
   let open = $state(false)
 
   const look = $derived(lookOf(dkey))
-  const caps = $derived(conn.driver.caps(conn.name, variant))
-  const builtIn = $derived<Effect[]>(conn.driver.effects(conn.name, variant))
+  // Read again when the link state changes: some families (ZENGGE) only learn their
+  // model from the advertisement heard while connecting.
+  const caps = $derived((conn.state, conn.driver.caps(conn.name, variant)))
+  const builtIn = $derived<Effect[]>((conn.state, conn.driver.effects(conn.name, variant)))
   // Asked from caps, not by building a test frame: BLEDIM's builders remember state.
   const supportsCustom = $derived(caps.custom && !!conn.driver.customEffect)
 
