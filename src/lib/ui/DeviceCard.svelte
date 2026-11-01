@@ -235,7 +235,8 @@
   let soundModeId = $state(0)
 </script>
 
-<div class="card col" style:border-color={checked ? 'var(--accent)' : undefined}>
+<div class="card col lit" style:border-color={checked ? 'var(--accent)' : undefined}
+     style:--rail={look.power === false ? undefined : look.colorHex}>
   <div class="row">
     <input
       type="checkbox"

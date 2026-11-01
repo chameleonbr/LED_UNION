@@ -77,6 +77,33 @@ export type Scene = {
   entries: { key: string; look: Look }[]
 }
 
+export type Vec3 = [number, number, number]
+export type MotionInput = 'speed' | 'gLong' | 'gLat' | 'gTotal'
+/** What a trigger does. A flash returns to the endpoint's look; a slot returns after `seconds`. */
+export type MotionAction =
+  | { kind: 'flash'; color: string; times: number }
+  | { kind: 'look'; power?: boolean; colorHex?: string; effect?: Effect }
+  | { kind: 'scene'; sceneId: string }
+  | { kind: 'slot'; slot: number; seconds: number }
+export type MotionRule = {
+  id: string
+  name: string
+  enabled: boolean
+  /** Endpoint keys. */
+  targets: string[]
+  /** Ignored for place rules. */
+  input: MotionInput
+  kind: 'map' | 'trigger' | 'place'
+  map?: { from: number; to: number; out: 'brightness' | 'gradient'; min: number; max: number; colors?: string[] }
+  trigger?: { op: '>=' | '<=' | 'abs>='; threshold: number; holdMs: number; cooldownMs: number; action: MotionAction }
+  place?: { placeId: string; on: 'enter' | 'leave'; action: MotionAction }
+}
+/** A saved location. Personal data: kept here only, never traced or sent. */
+export type Place = { id: string; name: string; lat: number; lon: number; radius: number }
+/** Gravity and forward axis in the phone's frame, for the way it sits in the holder. */
+export type Calibration = { gravity: Vec3; forward: Vec3; at: string }
+export type MotionSettings = { rules: MotionRule[]; places: Place[]; calibration?: Calibration }
+
 export type Persisted = {
   devices: SavedDevice[]
   groups: Group[]
@@ -92,6 +119,7 @@ export type Persisted = {
   stealth?: { since: string; snapshot: Record<string, Look> }
   /** The owner's own GIPHY API key; stays on this device. */
   giphyKey?: string
+  motion?: MotionSettings
 }
 
 export const seedColors = (): SavedColor[] =>
@@ -145,6 +173,14 @@ export function rekeyDevice(s: Persisted, from: string, to: string) {
   }
   for (const g of s.groups) g.deviceIds = g.deviceIds.map(move)
   for (const sc of s.scenes) sc.entries = sc.entries.map((e) => ({ ...e, key: move(e.key) }))
+  for (const r of s.motion?.rules ?? []) r.targets = r.targets.map(move)
+}
+
+/** Motion rules stop pointing at a forgotten device and its outputs. */
+export function dropMotionTargets(s: Persisted, id: string) {
+  for (const r of s.motion?.rules ?? []) {
+    r.targets = r.targets.filter((k) => k !== id && !k.startsWith(`${id}#`))
+  }
 }
 
 export function migrate(raw: unknown): Persisted {
@@ -165,6 +201,9 @@ export function migrate(raw: unknown): Persisted {
   if (!isRecord(merged.looks)) merged.looks = {}
   if (!isRecord(merged.labels)) merged.labels = {}
   if (merged.stealth && !isRecord(merged.stealth.snapshot)) merged.stealth = undefined
+  if (merged.motion && !(Array.isArray(merged.motion.rules) && Array.isArray(merged.motion.places))) {
+    merged.motion = undefined
+  }
   merged.customEffects = list(merged.customEffects).filter(
     (e: any) => isRecord(e) && typeof e.id === 'string' && Array.isArray(e.colors),
   )

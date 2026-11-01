@@ -275,6 +275,51 @@ UI rules 🟢:
 
 ---
 
+## Re-extraction 2026-11-01 — `374da11..56af9f9`
+
+### `ipixel` — iPixel Color panels (`protocol/ipixel.ts`) 🟢
+- `matches`: name contains `LED_BLE`; registry order keeps it **last**, so the GATT probe (service `00fa`, write `fa02`) decides, not the name.
+- Frames `[len u16 LE] [cmd] [type] payload`. Builders: `power` `05 00 07 01 <0|1>`, `brightness` `05 00 04 80 <0..100>`, `showSlot` `07 00 08 80 01 00 <slot>`, `orientation` `05 00 06 80 <0..3>`, `deleteAll` `04 00 03 80`. `rgb`/`effect`/`speed` return empty (BR-21).
+- `onConnect`: device-info query `08 00 01 80 <hh mm ss> 00` and HW query `04 00 05 80`.
+- `onNotify`: `parseHwInfo` (`08 00 05 80 maj min` → `mcu = maj*100+min`) first, else `parseDeviceInfo` (only a frame echoing `01 80`; byte 4 = type → `PANEL_SIZES`, byte 10 lock flag when present). Acks never overwrite size.
+- `chunkSize: 244`.
+
+### `ipixel-content` — upload bytes (`protocol/ipixel-content.ts`) 🟢
+- `windows(kind, slot, content, size)`: 15-byte header `len u16, dataType(2), option 00|02, total u32, crc32 u32, subType, slot` + slice. Data types image `02 00`/sub 00, GIF `03 00`/02, text `00 01`/00. Every window repeats total and CRC.
+- `windowSize`: 12288 for types `00/80/81` or mcu major 2, else 4096.
+- `parseAck(d, kind)`: only `05 00 <t0 t1>` of the same data type; status 1 next, 3 done, 0 rejected, 2 full.
+- Text: `textPayload` = 14-byte header (count u16, align 1,1, effect, speed 0..100, colour mode 1, RGB, bg 0×4) + `charBlock` per glyph. Legacy block `[sizeType RGB bits]` (sizeType: 16/32/48/64 px high, odd = not half-width); new block `[80 RGB w h bits]` for `newTextFormat(mcu)` ranges. `packGlyph` row-major, rows padded to bytes, LSB-first (MSB-first optional).
+- 10 unit tests incl. CRC (`0xcbf43926`) and exact header bytes.
+
+### `ble` additions 🟢
+- `listen` enables notify on every notify/indicate char of the service; each notification is traced, offered to `ackWaiters.get(id)` and to `driver.onNotify` → `patchPanel`.
+- `writeRaw(l, frame, driver, source, brief)`: chunks by `driver.chunkSize`; `brief` truncates the traced hex and sends chunks without gap.
+- `upload(id, kind, slot, content, {signal, onProgress})`: single `queue.push`; optional pre-select (`mcu ≥ 500`, 2 s, silence ok); per window `writeAndWait` (timer starts after the write, 6 s); `rejected`/`full` → `UploadError`; abort → `cancelled`. `listenFor` removes only its own waiter.
+- Stealth gate: `applyTo`/`sendFrames` call `leaveStealth()` unless `opts.force`; `SendOpts.source` tags the trace. `connectOnce` powers off a device that connects during stealth and adds it to the snapshot.
+- `connectGatt` (PR #6): on "no longer in range", `heardAdvert` (`watchAdvertisements` + `advertisementreceived`, 6 s, aborted in `finally`) then retry; up to 3 attempts.
+
+### `store` additions 🟢
+- `patchPanel(id, {orientation?, mcu?, lastSlot?})` replaces `setOrientation`; `store.stealth`; `store.giphyKey`; `forgetDevice` also prunes `stealth.snapshot`.
+- `persist.migrate` drops a malformed `stealth`.
+
+### Cross-cutting modules 🟢
+- `look.ts#applyLook`: moved out of Scenes; order power → brightness → speed → colour|white|cct → custom effect (+speed) | effect → panel slot; then `setLook`.
+- `stealth.ts`: `enterStealth` (snapshot online endpoints, force power off, record `power:false`), `exitStealth` (replay with `power:true` default, return unreachable names).
+- `trace.ts`: ring of 2000 `TraceEntry`, debounced flush (1 s) to `led-union/trace`; `clear`, download as JSON from Debug. 3 tests.
+
+### `panel/` — browser helpers (002) 🟢
+- `render.ts`: `renderImage` (createImageBitmap → canvas, fit cover/contain/stretch on black), `renderGif` (ImageDecoder, ≤ `maxFrames`, default 60), `encodePng` (OffscreenCanvas), `encodeGif` (gifenc, one global palette), `rasterText` (bold sans 85 % of height; half-width cell unless wider), `glyphFrame` (preview), `MAX_BYTES` 512 KB.
+- `library.ts`: IndexedDB `led-union-items`; `listItems`, `putItem` (plain copy), `removeItem`; `StorageFull` on quota.
+- `giphy.ts`: `search(key, q, offset)` → `/v1/gifs/search` (limit 24, rating g); `hitFrom` picks original under 2 MB else downsized; errors `badKey` (401/403), `limit` (429), `network`. 3 tests.
+- `prefs.svelte.ts`: `textPrefs.msbFirst` (Debug switch, not persisted).
+- `public/share-target.js`: SW `fetch` listener for POST `./share`; stores first file (`x-name` header) or text/url/title in Cache `led-union-share`, 303 → `./?share=1`. Loaded via `workbox.importScripts`.
+
+### `ui` additions 🟢
+- `App.svelte`: Panel tab; starts on Panel when `?share` present; stealth toggle.
+- `Panel.svelte`: device picker (drivers with `showSlot`), library grid (thumb URLs revoked), import file/URL/new text, duplicate/delete, GIPHY key + search + "more" + attribution, `takeShared` on mount. `{#key editing.id}` around the editor.
+- `PanelEditor.svelte`: preview canvas (animated), fit/frames or text/colour/effect/speed, slot input (default item slot, else `lastSlot+1`), `send` (leaveStealth → encode → size check → save → upload with progress/cancel → showSlot force → setLook → patchPanel → save with slot), save on close.
+- `DeviceCard.svelte`: iPixel controls (brightness, slot buttons, orientation, delete all) via `patchPanel`. `Debug.svelte`: trace view/download/clear, `msbFirst` switch. `Scenes.svelte`: uses `applyLook`.
+
 ## Findings (defects / risks)
 
 | # | Sev | Finding | Evidence |

@@ -101,3 +101,15 @@ None.
 ## Notes
 - 🟡 INFERRED: `tools/difftest/__pycache__/*.pyc` tracked in git — likely accidental.
 - Protocol knowledge base lives in `docs/protocol/` — primary source for spec writing alongside code.
+
+## Re-extraction 2026-11-01 (`374da11..56af9f9`, 33 files, +3119 −81)
+- New driver `src/lib/protocol/ipixel.ts` (+ `ipixel-content.ts`), 4th family; service `00fa`.
+- New folder `src/lib/panel/` (render, library, giphy, prefs, gifenc typings).
+- New cross-cutting modules `src/lib/stealth.ts`, `look.ts`, `trace.ts`.
+- New views `src/lib/ui/Panel.svelte`, `PanelEditor.svelte`; Panel tab in `App.svelte`.
+- New `public/share-target.js`; `vite.config.ts` manifest `share_target` + `workbox.importScripts`.
+- New dependency `gifenc` 1.0.3 (MIT).
+- New storage: localStorage `led-union/trace`, IndexedDB `led-union-items`, Cache `led-union-share`.
+- External: GIPHY API (owner key), Web Share Target.
+- Tests: 95 passing (`ipixel`, `ipixel-content`, `giphy`, `trace`, `persist` added).
+- Docs: `docs/protocol/ipixel.md`, `docs/protocol/coolled.md` (CoolLED1248 notes, no driver yet).

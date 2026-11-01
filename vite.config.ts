@@ -22,13 +22,14 @@ export default defineConfig(({ command }) => ({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
-      workbox: { importScripts: ['share-target.js'] },
+      // woff2 too: the font has to be there offline, in a car with no signal.
+      workbox: { importScripts: ['share-target.js'], globPatterns: ['**/*.{js,css,html,woff2}'] },
       manifest: {
         name: 'LED Union',
         short_name: 'LED Union',
         description: 'One app for every Bluetooth LED controller you own',
-        theme_color: '#0b0d12',
-        background_color: '#0b0d12',
+        theme_color: '#0d1726',
+        background_color: '#0d1726',
         display: 'standalone',
         orientation: 'portrait',
         // Relative, so it resolves against wherever the manifest is served from and

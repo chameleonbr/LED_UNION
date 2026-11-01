@@ -117,3 +117,12 @@ Scenario: Saving a scene from cards that have looks
 | `src/lib/ui/Effects.svelte` | `picked`, `pickedKeys`, `saveScene`, save card | 🟢 |
 | `src/lib/store.svelte.ts` | `addScene`, `removeScene`, `lookOf`, `setLook`, forget cascade on scenes | 🟢 |
 | `src/lib/persist.ts` | `Scene`, `Look`, `migrate` (scene filter) | 🟢 |
+
+## Re-extraction 2026-11-01 (`374da11..56af9f9`)
+
+> Delta from features 001 (iPixel phase 1, stealth, trace), 002 (panel content) and PR #6. Earlier sections above are unchanged unless noted here.
+
+| ID | Requirement | Priority | Acceptance criterion |
+|----|-------------|----------|---------------------|
+| RF-10 | 🟢 Scene apply uses shared `look.ts#applyLook`; order adds panel slot last (BR-33) | Must | A scene with an iPixel entry ends with `showSlot` |
+| RF-11 | 🟢 Scene apply respects the stealth gate (via `applyTo`) | Must | Applying a scene in stealth asks to leave |

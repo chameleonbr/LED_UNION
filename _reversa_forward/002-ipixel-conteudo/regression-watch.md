@@ -16,4 +16,15 @@
 
 ## Re-extraction history
 
+### Re-extraction 2026-11-01 13:00
+
+| ID | Verdict | Note |
+|----|---------|------|
+| W001 | 🟢 green | `_reversa_sdd/domain.md#BR-13`: upload is one queue op until every window ACKed/failed/cancelled |
+| W002 | 🟢 green | `domain.md#BR-15`: upload windows never coalesced; `pushLatest` for sliders only |
+| W003 | 🟡 yellow | Slot is recorded only after `upload` resolves, but the last window accepts ACK `01` as well as `03` (`domain.md#BR-30`, TD-16). Awaits judgement: tighten or accept |
+| W004 | 🟢 green | `domain.md#BR-38`: IndexedDB quota → "storage full", upload still sent |
+| W005 | 🟢 green | emitter md5 `98622b8733585ad72d2b82a0aa7767e0` re-computed 2026-11-01 |
+
+
 ## Archived

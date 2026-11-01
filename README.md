@@ -23,7 +23,7 @@ effect or scene in one go.
 | LEDLIKE | `FFE0` / `FFE1` | ✅ implemented (`70 … 0F`, white/CCT only) |
 | LEDPHO | `FFE0` / `FFE1` | ✅ implemented (`72 … 2F`, group-addressed) |
 | BLEDIM / LanQianTech | `FFF0` / **`FFF1`** | ✅ implemented (`55 AA`, variable length) |
-| iPixel Color (LED_BLE_* panels) | `00FA` / `FA02`, replies on `FA03` | 🧪 power, brightness, rotation, slots, panel size (tested on a 32×32); phase 2: send images, GIFs and text (Panel tab, GIPHY search, Android share), not yet tested on hardware |
+| iPixel Color (LED_BLE_* panels) | `00FA` / `FA02`, replies on `FA03` | 🧪 power, brightness, rotation, slots, panel size (tested on a 32×32); phase 2: send images, GIFs and text (Panel tab, GIPHY search, Android share) — tested on hardware except the share target |
 
 Be clear about what "implemented" means here. The `ffe0` driver is **confirmed on real
 hardware** — connecting, the `2A` handshake and the colour command all work on an
@@ -34,6 +34,18 @@ never been tried on a device.
 **Open question:** the controller we tested drives several physical outputs (a strip,
 a door handle, a door sill) and the default colour frame only reaches one of them. See
 the channels section in [`docs/protocol/ledble.md`](docs/protocol/ledble.md).
+
+## Motion mode
+
+The **Motion** tab drives the lights from the phone's sensors while you drive: brightness
+or colour follows GPS speed, a hard brake flashes them red, cornering or hard
+acceleration fires a look, a scene or a panel slot, and arriving at or leaving a saved
+place applies an action. **Stop** puts every light back as it was. Debug → *Simulate
+drive* tries the rules parked.
+
+It only runs while LED Union is on screen: Chrome stops the motion sensor and GPS for a
+hidden page or a locked phone. *Dark screen* keeps the page up with the display black.
+Live positions are never stored; saved places stay on the phone.
 
 ## Deployment
 

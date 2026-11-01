@@ -8,6 +8,9 @@
 |---|---|---|
 | `led-union/v1` | `localStorage` | JSON `Persisted` (current key) |
 | `led-onion/v1` | `localStorage` | Legacy key, read only when the current key is absent; never written |
+| `led-union/trace` | `localStorage` | JSON `TraceEntry[]`, last 2000; flushed at most once per second (001) |
+| `led-union-items` | IndexedDB | Object store of `PanelItem` (with Blobs), sorted by `updatedAt` desc on read (002) |
+| `led-union-share` / `shared` | Cache Storage | One pending Android share: a file (header `x-name`) or text/url; deleted when taken (002) |
 
 The whole `Persisted` object is rewritten on every mutation (`save()`). There is no versioning beyond the key suffix. Old shapes are fixed up by `migrate()` (see `flowcharts/store.md`).
 
@@ -24,6 +27,8 @@ The whole `Persisted` object is rewritten on every mutation (`save()`). There is
 | colors | SavedColor[] | ✔ | `seedColors()` (8) | Re-seeded when empty |
 | customEffects | CustomEffect[] | ✔ | `[]` | |
 | locale | string | – | absent | Absent means follow the browser |
+| stealth | `{ since: ISO string; snapshot: Record<EndpointKey, Look> }` | – | absent | Present only while stealth is on; dropped by migrate if `snapshot` is not a record (001) |
+| giphyKey | string | – | absent | Owner's GIPHY API key; never traced or committed (002) |
 
 ### SavedDevice
 | Field | Type | Req | Notes |
@@ -31,7 +36,8 @@ The whole `Persisted` object is rewritten on every mutation (`save()`). There is
 | id | string | ✔ | Web Bluetooth `BluetoothDevice.id` (browser-scoped, opaque) |
 | name | string | ✔ | Advertised name; **drives every protocol decision; never edited** |
 | label | string | – | User display name; empty string deletes it |
-| driverId | string | ✔ | `bledim` \| `fff0` \| `ffe0` (as last resolved) |
+| driverId | string | ✔ | `bledim` \| `fff0` \| `ffe0` \| `ipixel` (as last resolved by probe; preferred over the name on reload) |
+| panel | `PanelInfo & { orientation?, mcu?, lastSlot? }` | – | Panels only: size read back from the device, rotation chosen by the owner, firmware `maj*100+min`, last slot uploaded to (001/002) |
 | strip | StripConfig | – | Only on addressable models (`dmx`/`dmxs` layouts) |
 | channelMode | number | – | BLEDIM wiring: 1=DIM 2=CCT 3=RGB 4=RGBW; UI default 3 |
 
@@ -57,6 +63,7 @@ The whole `Persisted` object is rewritten on every mutation (`save()`). There is
 | speed | number | 0..100 | UI default display 50 |
 | effect | Effect | | Built-in effect object (id, name, group) |
 | customEffectId | string | | Refers to CustomEffect.id; cleared when that effect is deleted |
+| panel | `{ kind: 'slot'; slot: number }` | slot 1..100 | Panels: slot last put on screen; set after a successful upload or slot tap (001/002) |
 
 Setting a colour clears `effect` and `customEffectId`. Choosing an effect clears `customEffectId` (and the reverse). White, CCT and sound are **not** recorded (F5).
 
@@ -87,6 +94,32 @@ Editor default colours: `#00ff00, #000000, #ffbb00` (green → black → amber, 
 | id | string | `uid()` |
 | name | string | |
 | entries | `{ key: EndpointKey, look: Look }[]` | `look` is a `structuredClone` snapshot taken at save time |
+
+### PanelItem (IndexedDB, `src/lib/panel/library.ts`) — 002
+| Field | Type | Notes |
+|---|---|---|
+| id | string | `uid()` |
+| name | string | From file name, GIPHY title or "New text" |
+| kind | `image` \| `gif` \| `text` | GIF chosen by magic bytes `GIF8`, not MIME |
+| source | Blob | Original file (image, gif) |
+| fit | `{ mode: cover\|contain\|stretch; maxFrames }` | Default cover, 60 frames |
+| text | `{ value, color #rrggbb, effect 0..8, speed 0..100 }` | Text items only |
+| thumb | Blob | PNG of last render |
+| giphyId | string | When imported from GIPHY |
+| slots | Record<deviceId, number> | Slot last sent to, per device |
+| updatedAt | ISO string | |
+
+Writes copy the item to a plain object first (Svelte proxies cannot be cloned). A quota error becomes `StorageFull`.
+
+### TraceEntry (`src/lib/trace.ts`) — 001
+| Field | Type | Notes |
+|---|---|---|
+| t | ISO string | |
+| kind | `write` \| `notify` \| `connect` \| `disconnect` \| `error` | |
+| id, name, driver, char | string | Device and characteristic |
+| hex | string | Frame bytes; upload chunks truncated to 31 B + `… (N B)` |
+| source | string | `card`, `scene:<name>`, `stealth`, `debug`, `connect`, `upload:<kind>` |
+| ok, err | boolean, string | Write result |
 
 ## Key format: EndpointKey (`src/lib/endpoint.ts`)
 - `deviceId` means the whole device.

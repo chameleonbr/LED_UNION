@@ -9,8 +9,9 @@
   import Scenes from './lib/ui/Scenes.svelte'
   import Debug from './lib/ui/Debug.svelte'
   import Panel from './lib/ui/Panel.svelte'
+  import Motion from './lib/ui/Motion.svelte'
 
-  type Tab = 'devices' | 'effects' | 'scenes' | 'panel' | 'debug'
+  type Tab = 'devices' | 'effects' | 'scenes' | 'panel' | 'motion' | 'debug'
   // Arriving from the Android share sheet lands on the panel editor.
   let tab = $state<Tab>(new URLSearchParams(location.search).has('share') ? 'panel' : 'devices')
 
@@ -19,6 +20,7 @@
     { id: 'effects', key: 'nav.effects' },
     { id: 'scenes', key: 'nav.scenes' },
     { id: 'panel', key: 'nav.panel' },
+    { id: 'motion', key: 'nav.motion' },
     { id: 'debug', key: 'nav.debug' },
   ]
 
@@ -53,9 +55,11 @@
 
 <header>
   <div class="row spread">
-    <strong>LED Union</strong>
+    <strong class="brand">LED Union</strong>
     <div class="row" style="gap:10px">
-      <span class="small muted">{t('app.online', { n: online })}</span>
+      <span class="row small muted online" style="gap:6px" title={t('app.online', { n: online })}>
+        <span class="dot" class:online={online > 0}></span>{online}
+      </span>
       <button
         class="stealth"
         class:on={!!store.stealth}
@@ -67,10 +71,12 @@
       </button>
       <select
         class="lang"
+        aria-label={localeName[locale()] ?? locale()}
         value={locale()}
         onchange={(e) => chooseLocale((e.currentTarget as HTMLSelectElement).value)}
       >
-        {#each locales as l}<option value={l}>{localeName[l] ?? l}</option>{/each}
+        <!-- Codes keep the header on one line at 320 px; the open list still reads well. -->
+        {#each locales as l}<option value={l} title={localeName[l] ?? l}>{l.slice(0, 2).toUpperCase()}</option>{/each}
       </select>
     </div>
   </div>
@@ -97,6 +103,8 @@
     <Scenes />
   {:else if tab === 'panel'}
     <Panel />
+  {:else if tab === 'motion'}
+    <Motion />
   {:else}
     <Debug />
   {/if}
@@ -115,36 +123,38 @@
     position: sticky;
     top: 0;
     z-index: 2;
-    padding: 12px 16px;
+    padding: 10px 16px;
+    padding-top: calc(10px + env(safe-area-inset-top));
     background: var(--bg);
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid var(--surface-2);
   }
 
+  .brand { font-size: 22px; letter-spacing: .01em; white-space: nowrap; }
+  .online { white-space: nowrap; }
+
   .stealth {
-    min-height: 48px;
+    min-height: var(--tap);
     min-width: 48px;
-    font-size: 13px;
-    border-radius: 8px;
+    padding: 0 12px;
+    font-size: 15px;
   }
 
   .stealth.on {
     background: var(--err);
+    border-color: var(--err);
     color: #fff;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   .lang {
-    min-height: 32px;
-    font-size: 13px;
-    border-radius: 8px;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
+    min-height: 36px;
+    font-size: 15px;
     padding: 0 6px;
   }
 
   main {
     padding: 16px;
-    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
     max-width: 720px;
     margin: 0 auto;
   }
@@ -154,23 +164,44 @@
     left: 0;
     right: 0;
     bottom: 0;
+    z-index: 2;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
-    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    grid-template-columns: repeat(6, 1fr);
+    padding: 0 4px env(safe-area-inset-bottom);
     background: var(--surface);
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--surface-2);
   }
 
+  /* One row of six: condensed labels fit 320 px, and the content keeps the height. */
   nav button {
+    position: relative;
+    min-height: 56px;
+    padding: 0 2px;
     border: none;
-    border-radius: 10px;
-    font-size: 13px;
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 14px;
+    white-space: nowrap;
   }
+
+  nav button:hover:not(:disabled) { background: transparent; }
 
   nav button.active {
-    background: var(--surface-2);
     color: var(--accent);
     font-weight: 600;
+  }
+
+  /* The lit strip on the active tab echoes the rail on each light. */
+  nav button.active::before {
+    content: '';
+    position: absolute;
+    left: 20%;
+    right: 20%;
+    top: 0;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
   }
 </style>

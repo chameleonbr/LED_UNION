@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { empty, migrate, rekeyDevice, seedColors } from './persist.ts'
+import { dropMotionTargets, empty, migrate, rekeyDevice, seedColors } from './persist.ts'
 
 test('a fresh install starts with a usable palette', () => {
   const s = migrate(null)
@@ -189,4 +189,25 @@ test('rekeying a device moves its stealth snapshot too', () => {
   s.stealth = { since: 'x', snapshot: { old: { power: true }, 'old#1': { power: false } } }
   rekeyDevice(s, 'old', 'new')
   assert.deepEqual(Object.keys(s.stealth.snapshot).sort(), ['new', 'new#1'])
+})
+
+test('motion settings survive a reload; a malformed one is dropped', () => {
+  const motion = {
+    rules: [{ id: 'r', name: 'Brake', enabled: true, targets: ['a', 'a#1', 'b'], input: 'gLong', kind: 'trigger' }],
+    places: [{ id: 'h', name: 'Home', lat: 1, lon: 2, radius: 100 }],
+  }
+  assert.deepEqual(migrate({ ...empty(), motion }).motion, motion)
+  assert.equal(migrate({ ...empty(), motion: { rules: 'x' } }).motion, undefined)
+  assert.equal(migrate(empty()).motion, undefined)
+})
+
+test('motion targets follow a rekey and drop with a forgotten device', () => {
+  const s = migrate({
+    ...empty(),
+    motion: { rules: [{ id: 'r', name: 'n', enabled: true, targets: ['a', 'a#1', 'b'], input: 'speed', kind: 'map' }], places: [] },
+  })
+  rekeyDevice(s, 'a', 'z')
+  assert.deepEqual(s.motion!.rules[0].targets, ['z', 'z#1', 'b'])
+  dropMotionTargets(s, 'z')
+  assert.deepEqual(s.motion!.rules[0].targets, ['b'])
 })

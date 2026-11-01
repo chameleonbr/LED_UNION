@@ -2,6 +2,7 @@ import {
   empty,
   migrate,
   rekeyDevice,
+  dropMotionTargets,
   KEY,
   LEGACY_KEY,
   seedColors,
@@ -115,6 +116,7 @@ export function forgetDevice(id: string) {
     s.entries = s.entries.filter((e) => e.key !== id && !e.key.startsWith(`${id}#`))
   }
   store.scenes = store.scenes.filter((s) => s.entries.length > 0)
+  dropMotionTargets(store, id)
   save()
 }
 

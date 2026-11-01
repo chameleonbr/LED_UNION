@@ -129,3 +129,15 @@ Scenario: Unknown clone is not claimed
 | `src/lib/protocol/ffe0.ts` | `ffe0`, `layoutFor`, `outputsFor`, `authFrame`, `passwordQueryFrame` (dead), `isAddressable`, `rgbOrdersFor`, `spiConfigFrame`, `directionFrame` | 🟢 |
 | `src/lib/protocol/bledim.ts` | `bledim`, `frame`, `serialCodeFrame`, `switchChannelsFrame`, `readInfoFrame` (dead), `audioSenseFrame` (dead), `sceneFrame`, `staticScene`, `speedBrightness`, `stateFor` | 🟢 |
 | `src/lib/protocol/frames.test.ts` | 39 byte-template tests | 🟢 |
+
+## Re-extraction 2026-11-01 (`374da11..56af9f9`)
+
+> Delta from features 001 (iPixel phase 1, stealth, trace), 002 (panel content) and PR #6. Earlier sections above are unchanged unless noted here.
+
+| ID | Requirement | Priority | Acceptance criterion |
+|----|-------------|----------|---------------------|
+| RF-13 | 🟢 `drivers = [bledim, fff0, ffe0, ipixel]`; ipixel `matches` `LED_BLE` but ffe0 wins by name; service `00fa`/`fa02` (BR-04) | Must | `driverFor('LED_BLE_00203032')` is ffe0; probe resolves ipixel |
+| RF-14 | 🟢 ipixel builders: power `05 00 07 01 b`, brightness `05 00 04 80 p`, showSlot `07 00 08 80 01 00 s`, orientation `05 00 06 80 o`, deleteAll `04 00 03 80`; rgb/effect/speed empty | Must | `ipixel.test.ts` |
+| RF-15 | 🟢 `onConnect` = device-info query + HW query `04 00 05 80`; `onNotify` → `{mcu}` from `08 00 05 80 maj min`, else `{panel}` only from a `01 80` echo | Must | ACK frames never change size |
+| RF-16 | 🟢 `ipixel-content`: `windows` (15-byte header, total+CRC32 in every window, option 00 then 02), `windowSize` (12288/4096), `parseAck` per data type, `textPayload`/`charBlock`/`packGlyph`, `newTextFormat(mcu)` | Must | `ipixel-content.test.ts` (10 tests) |
+| RF-17 | 🟢 Difftest emitter md5 stays `98622b8733585ad72d2b82a0aa7767e0` (ipixel not in difftest) | Must | `node tools/difftest/emit_ts_frames.ts \| md5sum` |

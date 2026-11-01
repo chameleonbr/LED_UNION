@@ -1,5 +1,5 @@
 import { applyTo, sendFrames, type SendOpts } from './ble.svelte.ts'
-import { store, setLook, type Look } from './store.svelte.ts'
+import { store, setLook, type Look, type Scene } from './store.svelte.ts'
 
 function rgb(hex: string) {
   const n = parseInt(hex.slice(1), 16)
@@ -10,7 +10,7 @@ function rgb(hex: string) {
  * Apply one entry. Order matters on these controllers: an effect overrides a static
  * colour, so whichever is sent last wins. A panel's slot goes last for the same reason.
  */
-export async function applyLook(key: string, look: Look, opts?: SendOpts) {
+export async function applyLook(key: string, look: Look, opts?: SendOpts, record = true) {
   const keys = [key]
   if (look.power !== undefined) {
     await applyTo(keys, (d, n, c, v) => d.power(look.power!, n, c, v), undefined, opts)
@@ -48,5 +48,13 @@ export async function applyLook(key: string, look: Look, opts?: SendOpts) {
     const slot = look.panel.slot
     await applyTo(keys, (d, n) => d.showSlot?.(slot, n), undefined, opts)
   }
-  setLook(key, look)
+  // Motion output is transient: it is not what the light "is" once the drive ends.
+  if (record) setLook(key, look)
+}
+
+/** Replay a scene's entries in order. The caller decides about stealth. */
+export async function applyScene(scene: Scene, opts?: SendOpts, record = true) {
+  for (const entry of scene.entries) {
+    await applyLook(entry.key, entry.look, { force: true, source: `scene:${scene.name}`, ...opts }, record)
+  }
 }
