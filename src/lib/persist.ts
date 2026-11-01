@@ -120,6 +120,8 @@ export type Persisted = {
   /** The owner's own GIPHY API key; stays on this device. */
   giphyKey?: string
   motion?: MotionSettings
+  /** Day or night look chosen in the header; absent means follow the phone. */
+  theme?: 'light' | 'dark'
 }
 
 export const seedColors = (): SavedColor[] =>
@@ -201,6 +203,7 @@ export function migrate(raw: unknown): Persisted {
   if (!isRecord(merged.looks)) merged.looks = {}
   if (!isRecord(merged.labels)) merged.labels = {}
   if (merged.stealth && !isRecord(merged.stealth.snapshot)) merged.stealth = undefined
+  if (merged.theme !== 'light' && merged.theme !== 'dark') merged.theme = undefined
   if (merged.motion && !(Array.isArray(merged.motion.rules) && Array.isArray(merged.motion.places))) {
     merged.motion = undefined
   }

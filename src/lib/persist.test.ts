@@ -211,3 +211,8 @@ test('motion targets follow a rekey and drop with a forgotten device', () => {
   dropMotionTargets(s, 'z')
   assert.deepEqual(s.motion!.rules[0].targets, ['b'])
 })
+
+test('a saved day/night choice survives a reload; anything else follows the phone', () => {
+  assert.equal(migrate({ ...empty(), theme: 'light' }).theme, 'light')
+  assert.equal(migrate({ ...empty(), theme: 'sepia' }).theme, undefined)
+})
