@@ -22,6 +22,7 @@
   --font: 'Barlow Semi Condensed', ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Day: the phone's light preference, or the header toggle (data-theme) either way. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']) {
     color-scheme: light;
@@ -34,6 +35,17 @@
     --accent: #b86e00;
     --on-accent: #ffffff;
   }
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #eef2f7;
+  --surface: #ffffff;
+  --surface-2: #e3e9f2;
+  --line: #c9d4e3;
+  --text: #0f1b2d;
+  --muted: #55667e;
+  --accent: #b86e00;
+  --on-accent: #ffffff;
 }
 
 * { box-sizing: border-box; }

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import { conns, restore, supported } from './lib/ble.svelte.ts'
   import { t, locale, locales, localeName, chooseLocale } from './lib/i18n.svelte.ts'
-  import { store } from './lib/store.svelte.ts'
+  import { save, store } from './lib/store.svelte.ts'
   import { enterStealth, exitStealth } from './lib/stealth.ts'
   import Devices from './lib/ui/Devices.svelte'
   import Effects from './lib/ui/Effects.svelte'
@@ -51,12 +51,32 @@
 
   onMount(() => { restore() })
   $effect(() => { document.documentElement.lang = locale() })
+
+  // Night unless the phone or the owner says day; the toggle overrides the phone.
+  const prefersDay = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: light)') : undefined
+  let systemDay = $state(prefersDay?.matches ?? false)
+  onMount(() => {
+    const on = (e: MediaQueryListEvent) => (systemDay = e.matches)
+    prefersDay?.addEventListener('change', on)
+    return () => prefersDay?.removeEventListener('change', on)
+  })
+  const day = $derived(store.theme ? store.theme === 'light' : systemDay)
+  $effect(() => {
+    const root = document.documentElement
+    if (store.theme) root.dataset.theme = store.theme
+    else delete root.dataset.theme
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', day ? '#eef2f7' : '#0d1726')
+  })
+  function toggleTheme() {
+    store.theme = day ? 'dark' : 'light'
+    save()
+  }
 </script>
 
 <header>
   <div class="row spread">
     <strong class="brand">LED Union</strong>
-    <div class="row" style="gap:10px">
+    <div class="row" style="gap:6px">
       <span class="row small muted online" style="gap:6px" title={t('app.online', { n: online })}>
         <span class="dot" class:online={online > 0}></span>{online}
       </span>
@@ -68,6 +88,14 @@
         onclick={toggleStealth}
       >
         {store.stealth ? t('stealth.on') : t('stealth.off')}
+      </button>
+      <button class="theme" onclick={toggleTheme}
+              aria-label={day ? t('theme.toNight') : t('theme.toDay')} title={day ? t('theme.toNight') : t('theme.toDay')}>
+        {#if day}
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M21 14.5A8.5 8.5 0 0 1 9.5 3a8.5 8.5 0 1 0 11.5 11.5Z"/></svg>
+        {:else}
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></g></svg>
+        {/if}
       </button>
       <select
         class="lang"
@@ -129,13 +157,13 @@
     border-bottom: 1px solid var(--surface-2);
   }
 
-  .brand { font-size: 22px; letter-spacing: .01em; white-space: nowrap; }
+  .brand { font-size: 21px; letter-spacing: .01em; white-space: nowrap; }
   .online { white-space: nowrap; }
 
   .stealth {
     min-height: var(--tap);
     min-width: 48px;
-    padding: 0 12px;
+    padding: 0 10px;
     font-size: 15px;
   }
 
@@ -144,6 +172,13 @@
     border-color: var(--err);
     color: #fff;
     font-weight: 600;
+  }
+
+  .theme {
+    width: var(--tap);
+    padding: 0;
+    display: grid;
+    place-items: center;
   }
 
   .lang {
