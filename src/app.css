@@ -168,9 +168,95 @@ input[type='color'] {
 .dot.error { background: var(--err); }
 @keyframes pulse { 50% { opacity: .3; } }
 
-label.field { display: flex; flex-direction: column; gap: 4px; }
-label.field > span { font-size: 14px; color: var(--muted); }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field > span { font-size: 14px; color: var(--muted); }
+/* Slider labels: name on the left, live value on the right where the thumb ends. */
+.field > span.spread { display: flex; justify-content: space-between; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/*
+ * Chips: one tap picks an effect or a light. Pressed reads like a lit instrument
+ * button, amber edge and amber text, so the choice shows without opening anything.
+ */
+.chips {
+  /* Equal columns: long names wrap inside their own cell instead of pushing the row. */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 6px;
+  max-height: 248px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.chip {
+  position: relative;
+  min-height: 40px;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  font-weight: 500;
+  line-height: 1.15;
+  overflow: hidden;
+}
+.chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+}
+.chip.new { border-style: dashed; background: transparent; color: var(--muted); }
+.chip .stripe { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
+.chip-group {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/*
+ * Segmented control: a short, fixed set of choices as one bar split in equal parts, so
+ * it never wraps into a ragged second row on a narrow phone.
+ */
+.seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.seg > button {
+  min-height: var(--tap);
+  padding: 4px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--muted);
+}
+.seg > button + button { border-left: 1px solid var(--line); }
+.seg > button[aria-pressed='true'] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+}
+.seg + .seg { margin-top: 6px; }
+
+/* One row of swatches that slides sideways instead of taking two lines. */
+.swipe {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  /* Room for the picked swatch's ring, which overflow would clip. */
+  padding: 6px;
+  margin: -6px;
+  /* Fades the right edge: the cut-off swatch says there is more to drag in. */
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
+}
+.swipe::-webkit-scrollbar { display: none; }
+.swipe > * { flex: none; scroll-snap-align: start; }

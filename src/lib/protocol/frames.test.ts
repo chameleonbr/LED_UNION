@@ -293,11 +293,11 @@ test('bledim commands match docs/protocol/bledim.md', async () => {
   assert.equal(slow[2], 0, 'speed scaled')
   assert.equal(slow[3], 255, 'brightness survives a speed change')
 
-  // An effect ships a whole 72-byte scene, with the id in byte 14 plus the chase bit.
-  const eff = bledim.effect({ id: 4, name: 'M5' }, 'BLEDIM')
+  // An effect ships a whole 72-byte scene: a colour list, as the app's PWM presets are.
+  const eff = bledim.effect({ id: 2, name: 'Fade 3 colours' }, 'BLEDIM')
   assert.equal(eff.length, 6 + 72 + 1, 'SCENE_PACKET_SIZE is 79')
-  assert.equal(body(eff)[14], 0x84, 'id 4 with bit 7 set')
-  assert.equal(bledim.effects('BLEDIM').length, 13)
+  assert.equal(body(eff)[14], 0, 'no chase mode index on PWM wiring')
+  assert.equal(bledim.effects('BLEDIM').length, 8)
 })
 
 test('bledim claims only genuine names, never clone modules or the ELK family', async () => {
@@ -410,14 +410,25 @@ test('effect tables follow the family', () => {
 
 test('bledim scene struct matches the buffers the app itself builds', async () => {
   const { bledim } = await import('./bledim.ts')
-  const p = [...bledim.effect({ id: 0, name: 'M1' }, 'BLEDIM')].slice(6, -1)
+  const p = [...bledim.effect({ id: 0, name: 'Jump 7 colours' }, 'BLEDIM')].slice(6, -1)
   assert.equal(p.length, 72)
-  assert.equal(p[0], 0, 'fade off')
+  assert.equal(p[0], 0, 'jump, no fade')
   // The app zeroes the scene slot on every buffer it builds. The 0x88 command has a
   // separate scene field that does use 255 — conflating the two was a real bug.
   assert.equal(p[4], 0, 'iSceneNo is 0 here, not the 0x88 free-scene sentinel')
-  assert.equal(p[14] & 0x80, 0x80, 'chase bit set')
-  assert.equal(p[14] & 0x7f, 0, 'effect index in the low 7 bits')
+  // MyData.Flush3CHScenes slot 7, FlushDynamicColor(0, 7, 0, 3): R G B Y M C W.
+  assert.equal(p[3], 7)
+  assert.deepEqual(p.slice(16, 44), [
+    0, 255, 0, 0, 0, 0, 255, 0, 0, 0, 0, 255, 0, 255, 255, 0,
+    0, 255, 0, 255, 0, 0, 255, 255, 0, 255, 255, 255,
+  ])
+  // Slot 12, FlushTwoColor(0, red, blue, 1, 255): red, dark, blue, dark, strobe 255.
+  const police = [...bledim.effect({ id: 5, name: 'Police' }, 'BLEDIM-police')].slice(6, -1)
+  assert.deepEqual([police[0], police[3], police[6], police[14]], [0, 4, 255, 0])
+  assert.deepEqual(police.slice(16, 32), [0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 0, 0, 0, 0])
+  // Slot 9, FlushDynamicColor(1, 3, 0, 3): fade R G B.
+  const fade = [...bledim.effect({ id: 2, name: 'Fade 3 colours' }, 'BLEDIM-fade')].slice(6, -1)
+  assert.deepEqual([fade[0], fade[3]], [1, 3])
 })
 
 test('LEDCAR-01 has its own power frame, not the LEDDMX one', () => {
@@ -448,23 +459,14 @@ test('bledim scene header matches what the app itself builds at runtime', async 
   // The static extractor can only pin this frame's header, because the app memcpy's
   // the payload. These vectors came from calling the app's own ScenePara.EnPackToDb()
   // inside a rooted Android container.
-  for (const [key, effectId] of [['effect0_chase', 0], ['effect4_chase', 4]] as const) {
-    const want = parse(fx[key])
-    // A device name no other test has touched, so the per-device state is pristine.
-    const got = [...bledim.effect({ id: effectId, name: 'x' }, `BLEDIM-fixture-${key}`)]
-      .slice(6, -1)
-    assert.equal(got.length, want.length)
-    // Offsets 0..15 are the scene header; everything past it is the colour table,
-    // and only the first `bClrQty` entries are read.
-    assert.deepEqual(
-      got.slice(0, 16),
-      want.slice(0, 16),
-      `${key}: scene header must match the app byte for byte`,
-    )
-  }
-
-  // The sentinel for "no built-in effect" is 0xFF, never 0.
-  assert.equal(parse(fx.static_color)[14], 0xff)
+  // A one-colour list from a pristine device state is the constructor's own header.
+  const want = parse(fx.default)
+  const got = [...bledim.customEffect!({ colors: [{ r: 0, g: 0, b: 0 }], fade: false }, 'BLEDIM-fixture')[0]]
+    .slice(6, -1)
+  assert.equal(got.length, want.length)
+  // Offsets 0..15 are the scene header; everything past it is the colour table,
+  // and only the first `bClrQty` entries are read.
+  assert.deepEqual(got.slice(0, 16), want.slice(0, 16), 'scene header must match the app byte for byte')
   assert.equal(parse(fx.default)[1], 0xc0, 'default speed 192')
   assert.equal(parse(fx.default)[2], 0xff, 'default brightness 255')
 })
@@ -630,7 +632,7 @@ test('bledim fits a whole colour sequence in one scene frame', async () => {
   assert.equal(p.length, 72)
   assert.equal(p[0], 1, 'fade on')
   assert.equal(p[3], 3, 'colour count')
-  assert.equal(p[14], 0xff, 'no built-in effect: the colour list drives it')
+  assert.equal(p[14], 0, 'byte 14 stays 0 on PWM wiring, as in the app')
   // Entries are [W, R, G, B] from offset 16.
   assert.deepEqual(p.slice(16, 20), [0, 0x00, 0xff, 0x00])
   assert.deepEqual(p.slice(20, 24), [0, 0x00, 0x00, 0x00])
@@ -672,7 +674,7 @@ test('bledim brightness scales a static colour, and drives 0x88 for effects', as
   assert.deepEqual(full.slice(16, 20), [0, 200, 100, 50])
 
   // An effect replaces the static colour, so brightness goes back to the 0x88 path.
-  bledim.effect({ id: 3, name: 'M4' }, N)
+  bledim.effect({ id: 3, name: 'Pulse 7 colours' }, N)
   assert.equal(bledim.brightness(50, N)[3], 0x88)
 
   // Speed always drives 0x88 — it only means anything while an effect is running.

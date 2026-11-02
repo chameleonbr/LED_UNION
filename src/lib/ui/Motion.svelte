@@ -6,7 +6,7 @@
   import { labelOf, lookOf, save, store, uid } from '../store.svelte.ts'
   import type { MotionRule } from '../persist.ts'
   import { accelRule, brakeLight, brightnessBySpeed, cornerRule } from '../motion/engine.ts'
-  import { calibrateNow, here, live, start, stop } from '../motion/sensors.svelte.ts'
+  import { calibrateNow, here, live, simulate, start, stop } from '../motion/sensors.svelte.ts'
   import MotionRuleEditor, { type Target } from './MotionRuleEditor.svelte'
 
   store.motion ??= { rules: [], places: [] }
@@ -20,7 +20,7 @@
       const outs = c.driver.outputs?.(c.name) ?? []
       if (outs.length < 2) return [{ key: c.id, label: displayName(c), panel, bledim }]
       return outs.map((o, i) => ({
-        key: epKey(c.id, i), label: `${displayName(c)} · ${labelOf(epKey(c.id, i), o.label)}`, panel, bledim,
+        key: epKey(c.id, i), label: labelOf(epKey(c.id, i), o.label), device: displayName(c), panel, bledim,
       }))
     }),
   )
@@ -59,6 +59,8 @@
     brake: brakeLight, speed: brightnessBySpeed, corner: cornerRule, accel: accelRule,
   } as const
   let presetPick = $state('')
+  /** A rule just added opens for editing; the others stay as one-line summaries. */
+  let added = $state('')
   function addPreset(k: keyof typeof presets | 'new') {
     // Presets start on every light except panels, which take no colour.
     const all = targets.filter((x) => !x.panel).map((x) => x.key)
@@ -66,6 +68,7 @@
       ? { ...brightnessBySpeed(uid(), t('motion.newRule'), []) }
       : presets[k](uid(), t(`motion.preset.${k}`), k === 'speed' ? all.slice(0, 1) : all)
     motion.rules.push(rule)
+    added = rule.id
     save()
     presetPick = ''
   }
@@ -129,42 +132,79 @@
     ].filter(Boolean) as string[],
   )
   const bar = (g: number) => `${Math.min(50, Math.abs(g) * 50)}%`
+  const clampG = (g: number) => Math.max(-1, Math.min(1, g))
+
+  const MAX_KMH = 160
+  const TICKS = [0, 40, 80, 120, 160]
+  const SWEEP = 240
+  /** Point at fraction k (0..1) of the arc, radius r, centred at (100, 100). */
+  function polar(k: number, r: number): [number, number] {
+    const a = ((-90 - SWEEP / 2 + k * SWEEP) * Math.PI) / 180
+    return [100 + r * Math.cos(a), 100 + r * Math.sin(a) + 4]
+  }
+  const ARC = (() => {
+    const [x0, y0] = polar(0, 86)
+    const [x1, y1] = polar(1, 86)
+    return `M ${x0} ${y0} A 86 86 0 1 1 ${x1} ${y1}`
+  })()
+  const speedPct = $derived(Math.min(100, (live.speed / MAX_KMH) * 100))
 </script>
 
 <div class="col">
-  <div class="card col gauges">
-    <div class="row spread">
-      <div class="speed"><b>{Math.round(live.speed)}</b> <span class="muted">{t('motion.speed')}</span></div>
-      <div class="ball" aria-hidden="true">
-        <span style="left:{50 + Math.max(-1, Math.min(1, live.gLat)) * 45}%; top:{50 - Math.max(-1, Math.min(1, live.gLong)) * 45}%"></span>
-      </div>
+  <div class="card col cluster" class:demo={live.simulating}>
+    <div class="dials">
+      <!-- Speedometer: 0..160 km/h on a 240° arc, amber up to the current speed. -->
+      <svg class="gauge" viewBox="0 0 200 170" role="img" aria-label={`${Math.round(live.speed)} ${t('motion.speed')}`}>
+        <path d={ARC} class="track" pathLength="100" />
+        <path d={ARC} class="fill" pathLength="100" stroke-dasharray={`${speedPct} 200`} opacity={speedPct > 0 ? 1 : 0} />
+        {#each TICKS as k}
+          {@const [x, y] = polar(k / MAX_KMH, 66)}
+          <text {x} {y} class="tick">{k}</text>
+        {/each}
+        <text x="100" y="108" class="kmh">{Math.round(live.speed)}</text>
+        <text x="100" y="132" class="unit">{t('motion.speed')}</text>
+      </svg>
+      <!-- G-ball seen from above: rings at 0.5 G and 1 G, forward is up. -->
+      <svg class="ball" viewBox="-50 -50 100 100" aria-hidden="true">
+        <circle r="45" class="ring" />
+        <circle r="22.5" class="ring" />
+        <line x1="-45" x2="45" class="ring" />
+        <line y1="-45" y2="45" class="ring" />
+        <circle r="6" class="dot" cx={clampG(live.gLat) * 45} cy={-clampG(live.gLong) * 45} />
+      </svg>
     </div>
     {#each [['gLong', live.gLong], ['gLat', live.gLat]] as [k, g]}
       <div class="row small">
-        <span class="lbl">{t(`motion.${k}`)}</span>
+        <span class="lbl muted">{t(`motion.${k}`)}</span>
         <div class="axis grow">
           <span class:neg={(g as number) < 0} style="width:{bar(g as number)}"></span>
         </div>
         <span class="num">{(g as number).toFixed(2)}</span>
       </div>
     {/each}
-    {#if live.lastTrigger}<div class="small" style="color:var(--accent)">{t('motion.lastTrigger', { name: live.lastTrigger })}</div>{/if}
+    {#if live.lastTrigger}<div class="small fired">{t('motion.lastTrigger', { name: live.lastTrigger })}</div>{/if}
     {#each status as s}<div class="small" style="color:var(--warn)">{s}</div>{/each}
     {#if msg}<div class="small" style="color:var(--err)">{msg}</div>{/if}
 
     <button class="primary big" disabled={live.simulating} onclick={toggle}>
-      {live.running ? t('motion.stop') : t('motion.start')}
+      {live.running && !live.simulating ? t('motion.stop') : t('motion.start')}
     </button>
     <div class="row">
       <button class="grow" disabled={live.calibrating || live.simulating} onclick={calibrate}>
         {live.calibrating ? t('motion.calibrating') : t('motion.calibrate')}
       </button>
       <button class="grow" disabled={!live.running} onclick={enterDark}>{t('motion.dark')}</button>
+      <button class="grow" class:primary={live.simulating} disabled={live.running && !live.simulating}
+              onclick={() => (live.simulating ? stop() : simulate())}>
+        {live.simulating ? t('motion.demoStop') : t('motion.demo')}
+      </button>
     </div>
-    <div class="small muted">
-      {motion.calibration ? t('motion.calibrateHint') : t('motion.uncalibrated')}
-    </div>
-    <div class="small muted">{t('motion.screenNote')}</div>
+    <details class="small muted">
+      <summary>{t('motion.howItWorks')}</summary>
+      <p>{motion.calibration ? t('motion.calibrateHint') : t('motion.uncalibrated')}</p>
+      <p>{t('motion.screenNote')}</p>
+      <p>{t('motion.demoHint')}</p>
+    </details>
   </div>
 
   <div class="row spread">
@@ -178,7 +218,7 @@
   </div>
   {#if motion.rules.length === 0}<div class="card muted">{t('motion.noRules')}</div>{/if}
   {#each motion.rules as rule (rule.id)}
-    <MotionRuleEditor {rule} {targets} ondelete={() => removeRule(rule)} />
+    <MotionRuleEditor {rule} {targets} startOpen={rule.id === added} ondelete={() => removeRule(rule)} />
   {/each}
 
   <div class="card col">
@@ -217,23 +257,25 @@
 {/if}
 
 <style>
-  .speed b { font-size: 56px; line-height: 1; font-variant-numeric: tabular-nums; }
-  .ball {
-    position: relative;
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    border: 1px solid var(--line);
-    background: radial-gradient(circle, var(--surface-2) 30%, transparent 31%);
+  .dials { display: flex; align-items: center; gap: 8px; }
+  .gauge { flex: 1; min-width: 0; max-width: 240px; }
+  .track, .fill { fill: none; stroke-width: 10; stroke-linecap: round; }
+  .track { stroke: var(--surface-2); }
+  .fill {
+    stroke: var(--accent);
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 60%, transparent));
+    transition: stroke-dasharray .1s linear;
   }
-  .ball span {
-    position: absolute;
-    width: 12px;
-    height: 12px;
-    margin: -6px 0 0 -6px;
-    border-radius: 50%;
-    background: var(--accent);
-  }
+  .tick { fill: var(--muted); font-size: 11px; text-anchor: middle; dominant-baseline: middle; }
+  .kmh { fill: var(--text); font-size: 54px; font-weight: 600; text-anchor: middle; }
+  .unit { fill: var(--muted); font-size: 13px; text-anchor: middle; }
+  .ball { width: 104px; flex: none; }
+  .ring { fill: none; stroke: var(--line); stroke-width: 1; }
+  .dot { fill: var(--accent); transition: cx .1s linear, cy .1s linear; }
+  .cluster.demo { border-color: var(--accent); }
+  .fired { color: var(--accent); }
+  details summary { cursor: pointer; min-height: var(--tap); display: flex; align-items: center; }
+  details p { margin: 0 0 8px; }
   .lbl { width: 96px; }
   .num { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
   .axis {

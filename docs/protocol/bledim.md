@@ -87,11 +87,26 @@ Total frame = 72 + 7 = **79** (`SCENE_PACKET_SIZE`).
 | 11 | channel 4 = W |
 | 12 | colour width |
 | 13 | colour index |
-| **14** | **effect id**: bits 0-6 = index 0..12, bit 7 = chase mode |
+| **14** | chase mode index (addressable wiring only); `0` on PWM wiring |
 | 16..71 | up to 14 colour entries × 4 bytes `[W, R, G, B]` |
 
-Byte 14 equal to `255` means "no effect" — a static colour scene. The app's own UI
-labels these `M1..M13` from the index; it has no real names for them.
+On PWM wiring (DIM, CCT, RGB, RGBW) the app has **no effect ids**. Its effect buttons
+are colour-list scenes from `MyData.Flush3CHScenes`: byte 0 picks jump (`0`) or fade
+(`1`), byte 3 is the colour count, and `FlushDynamicColor` can put a black entry after
+every colour. Byte 14 stays `0`. The mode index in byte 14 (with bit 7 meaning
+"reverse", only for modes above 1) belongs to `ChaseDialog`, the addressable chase
+screen; a PWM controller ignores it.
+
+| app slot | builder | plays |
+|---|---|---|
+| 7 | `FlushDynamicColor(0, 7, 0, 3)` | jump R G B Y M C W |
+| 8 | `FlushDynamicColor(0, 3, 1, 3)` | jump R G B with a dark step after each |
+| 9 | `FlushDynamicColor(1, 3, 0, 3)` | fade R G B |
+| 10 | `FlushDynamicColor(1, 7, 1, 3)` | fade 7 colours through dark |
+| 11 | `FlushDynamicColor(1, 1, 1, 3)` | fade red and dark (breathing) |
+| 12 | `FlushTwoColor(0, red, blue, 1, 255)` | jump red, dark, blue, dark, strobe byte 255 |
+
+Source: the app at versionCode 51, the last build shipped without a packer.
 
 ### `0x81` lights, `0x82` persists
 

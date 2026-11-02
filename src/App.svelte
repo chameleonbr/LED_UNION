@@ -157,7 +157,8 @@
     border-bottom: 1px solid var(--surface-2);
   }
 
-  .brand { font-size: 21px; letter-spacing: .01em; white-space: nowrap; }
+  /* Shrinks on the narrowest phones so the header buttons stay on one line. */
+  .brand { font-size: clamp(17px, 5.6vw, 21px); letter-spacing: .01em; white-space: nowrap; }
   .online { white-space: nowrap; }
 
   .stealth {
