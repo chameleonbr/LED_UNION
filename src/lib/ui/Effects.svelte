@@ -58,7 +58,8 @@
 
   function sharedEffects(keys: string[]): Effect[] {
     const members = logicals.filter((l) => keys.includes(l.key))
-    const tables = members.map((l) => l.conn.driver.effects(l.conn.name, l.variant))
+    // conn.state: a model learned while connecting can change the table (ZENGGE).
+    const tables = members.map((l) => (l.conn.state, l.conn.driver.effects(l.conn.name, l.variant)))
     const sig = (fx: Effect[]) => JSON.stringify(fx.map((e) => [e.id, e.group]))
     const same =
       members.length > 0 &&

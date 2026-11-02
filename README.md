@@ -24,6 +24,8 @@ effect or scene in one go.
 | LEDPHO | `FFE0` / `FFE1` | ✅ implemented (`72 … 2F`, group-addressed) |
 | BLEDIM / LanQianTech | `FFF0` / **`FFF1`** | ✅ implemented (`55 AA`, variable length) |
 | iPixel Color (LED_BLE_* panels) | `00FA` / `FA02`, replies on `FA03` | 🧪 power, brightness, rotation, slots, panel size (tested on a 32×32); phase 2: send images, GIFs and text (Panel tab, GIPHY search, Android share) — tested on hardware except the share target |
+| Magic Light (LEDBLE / LEDBlue / FluxBlue…) | `FFE5` / `FFE9`, replies on `FFE4` | 🧪 power, colour, white, 20 modes, colour list — from the decompiled app, not yet tested on hardware |
+| ZENGGE (LEDnetWF…) | `FFFF` / `FF01` | 🧪 power, colour, white/CCT, effects per model — from the decompiled app and lednetwf_ble, not yet tested on hardware |
 
 Be clear about what "implemented" means here. The `ffe0` driver is **confirmed on real
 hardware** — connecting, the `2A` handshake and the colour command all work on an

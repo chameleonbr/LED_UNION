@@ -6,7 +6,7 @@ import { toHex } from './hex.ts'
 import { trace } from './trace.ts'
 import { epKey, parseEp } from './endpoint.ts'
 export { epKey, parseEp }
-import { allServices, driverFor, drivers, type Driver } from './protocol/index.ts'
+import { allServices, driverFor, drivers, manufacturerIds, type Driver } from './protocol/index.ts'
 import { parseAck, windowSize, windows, type ContentKind } from './protocol/ipixel-content.ts'
 import {
   forgetDevice,
@@ -166,9 +166,10 @@ export async function addDevice(): Promise<Conn | undefined> {
     filters: [
       ...allServices.map((s) => ({ services: [s] })),
       // Some panels advertise only their name, not the service.
-      ...drivers.flatMap((d) => (d.namePrefix ? [{ namePrefix: d.namePrefix }] : [])),
+      ...drivers.flatMap((d) => [d.namePrefix ?? []].flat().map((namePrefix) => ({ namePrefix }))),
     ],
     optionalServices: allServices,
+    optionalManufacturerData: manufacturerIds,
   })
   // A device already saved under another id is most likely this one coming back. Only
   // a single unlinked match is safe to take over: two "BLEDIM"s cannot be told apart.
@@ -187,6 +188,7 @@ export async function relink(savedId: string): Promise<Conn | undefined> {
   const device = await navigator.bluetooth.requestDevice({
     filters: [{ name: saved.name }],
     optionalServices: allServices,
+    optionalManufacturerData: manufacturerIds,
   })
   return pickAndConnect(device, savedId)
 }
@@ -222,22 +224,28 @@ async function connectGatt(device: BluetoothDevice): Promise<BluetoothRemoteGATT
 }
 
 /** Wait up to `ms` for one advertisement from the device. False when unsupported or silent. */
-async function heardAdvert(device: BluetoothDevice, ms = 6000): Promise<boolean> {
-  if (!device.watchAdvertisements) return false
+const heardAdvert = async (device: BluetoothDevice, ms = 6000) => !!(await nextAdvert(device, ms))
+
+/** The next advertisement the device sends, or undefined if none comes within `ms`. */
+async function nextAdvert(device: BluetoothDevice, ms: number): Promise<BluetoothAdvertisingEvent | undefined> {
+  if (!device.watchAdvertisements) return undefined
   const stop = new AbortController()
   try {
-    const heard = new Promise<boolean>((resolve) => {
-      device.addEventListener('advertisementreceived', () => resolve(true), { once: true, signal: stop.signal })
-      setTimeout(() => resolve(false), ms)
+    const heard = new Promise<BluetoothAdvertisingEvent | undefined>((resolve) => {
+      device.addEventListener('advertisementreceived', (e) => resolve(e as BluetoothAdvertisingEvent), { once: true, signal: stop.signal })
+      setTimeout(() => resolve(undefined), ms)
     })
     await device.watchAdvertisements({ signal: stop.signal })
     return await heard
   } catch {
-    return false
+    return undefined
   } finally {
     stop.abort()
   }
 }
+
+// Once per session is enough: the model a device advertises does not change.
+const advertised = new Set<string>()
 
 /** Turn a DOMException into something that says what to actually do about it. */
 function explain(e: unknown): string {
@@ -263,29 +271,49 @@ async function resolveDriver(
   server: BluetoothRemoteGATTServer,
   guess: Driver,
 ): Promise<{ driver: Driver; char: BluetoothRemoteGATTCharacteristic }> {
-  const order = [guess, ...drivers.filter((d) => d !== guess)]
+  // Families that also claim the name go right after the guess: a Magic Light named
+  // LEDBLE-xx can carry an FFF0 service too, and BLEDIM must not win it on the way.
+  const name = server.device.name ?? ''
+  const order = [
+    guess,
+    ...drivers.filter((d) => d !== guess && d.matches(name)),
+    ...drivers.filter((d) => d !== guess && !d.matches(name)),
+  ]
   const seen: string[] = []
+  const found = new Map<Driver, BluetoothRemoteGATTService>()
   for (const driver of order) {
-    let service: BluetoothRemoteGATTService
+    // A family sharing the guess's service is told apart by name (BLEDIM vs ELK), so
+    // its characteristic turning up proves nothing; the fallback below decides.
+    if (driver !== guess && driver.service === guess.service) continue
     try {
-      service = await server.getPrimaryService(driver.service)
+      const service = await server.getPrimaryService(driver.service)
+      found.set(driver, service)
+      const char = await service.getCharacteristic(driver.writeChar)
+      if (char.properties.write || char.properties.writeWithoutResponse) return { driver, char }
     } catch {
-      continue // Different family.
+      // Different family, or the right service with another write handle.
     }
+  }
 
-    // The documented characteristic is the happy path, but vendors reuse the same
-    // service with a different write handle — BLEDIM does. Any writable
-    // characteristic in the right service beats refusing to connect.
-    try {
-      return { driver, char: await service.getCharacteristic(driver.writeChar) }
-    } catch {
-      const chars = await service.getCharacteristics()
-      seen.push(...chars.map((c) => c.uuid.slice(4, 8)))
-      const writable = chars.find(
-        (c) => c.properties.write || c.properties.writeWithoutResponse,
-      )
-      if (writable) return { driver, char: writable }
+  // No family's documented characteristic exists, but vendors reuse a service with a
+  // different write handle — BLEDIM does. Any writable characteristic in the right
+  // service beats refusing to connect. This only runs after the exact pass, because a
+  // Magic Light also carries an FFE0 service (for its replies) that FFE0 would grab.
+  for (const driver of order) {
+    let service = found.get(driver)
+    if (!service) {
+      try {
+        service = await server.getPrimaryService(driver.service)
+      } catch {
+        continue
+      }
     }
+    const chars = await service.getCharacteristics()
+    seen.push(...chars.map((c) => c.uuid.slice(4, 8)))
+    const writable = chars.find(
+      (c) => c.properties.write || c.properties.writeWithoutResponse,
+    )
+    if (writable) return { driver, char: writable }
   }
   throw new Error(
     seen.length
@@ -303,7 +331,7 @@ const notifying = new WeakSet<BluetoothRemoteGATTCharacteristic>()
 async function listen(id: string, server: BluetoothRemoteGATTServer, driver: Driver) {
   if (!driver.notifyChar) return
   try {
-    const service = await server.getPrimaryService(driver.service)
+    const service = await server.getPrimaryService(driver.notifyService ?? driver.service)
     const ch = await service.getCharacteristic(driver.notifyChar)
     if (!notifying.has(ch)) {
       notifying.add(ch)
@@ -314,7 +342,8 @@ async function listen(id: string, server: BluetoothRemoteGATTServer, driver: Dri
         lastNotify[id] = toHex(data)
         trace({ kind: 'notify', id, char: ch.uuid, hex: lastNotify[id] })
         ackWaiters.get(id)?.(data)
-        const report = conns[id]?.driver.onNotify?.(data)
+        const c = conns[id]
+        const report = c?.driver.onNotify?.(data, builderName(c))
         if (report?.panel) setPanel(id, report.panel)
         if (report?.mcu !== undefined) patchPanel(id, { mcu: report.mcu })
       })
@@ -347,6 +376,13 @@ async function connectOnce(id: string): Promise<void> {
   c.state = 'connecting'
   c.error = undefined
   try {
+    // Most devices stop advertising once connected, so this has to come first.
+    if (c.driver.onAdvert && !advertised.has(id)) {
+      // Tried once either way: a device that never advertises must not cost 3 s a time.
+      advertised.add(id)
+      const ad = await nextAdvert(l.device, 3000)
+      if (ad) c.driver.onAdvert(builderName(c), ad)
+    }
     const server = await connectGatt(l.device)
     const resolved = await resolveDriver(server, c.driver)
     if (resolved.driver !== c.driver) {

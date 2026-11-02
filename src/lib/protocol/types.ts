@@ -114,11 +114,26 @@ export type Driver = {
   cct?(warm: number, cool: number, name: string, variant?: string): Uint8Array
 
   /** Also offer devices whose name starts with this, for units that do not advertise the service. */
-  namePrefix?: string
+  namePrefix?: string | string[]
   /** Characteristic the family answers on. Only families that reply set it. */
   notifyChar?: string
-  /** Decode one notification. Undefined when it carries nothing the app keeps. */
-  onNotify?(data: Uint8Array): DeviceReport | undefined
+  /** Service holding notifyChar, when it is not the write service. */
+  notifyService?: string
+  /**
+   * Decode one notification. Undefined when it carries nothing the app keeps. `name` is
+   * the builder key, so a family can remember what the device said about itself.
+   */
+  onNotify?(data: Uint8Array, name?: string): DeviceReport | undefined
+  /**
+   * Company ids whose advertised manufacturer data the family reads. Chrome hides
+   * manufacturer data unless the chooser asked for the id up front.
+   */
+  manufacturerIds?: number[]
+  /**
+   * The advertisement heard just before connecting, for families that say what model
+   * they are only there. Called with the builder key.
+   */
+  onAdvert?(name: string, ad: Advert): void
 
   /** LED panels: show content already stored in a numbered slot. */
   showSlot?(slot: number, name: string): Uint8Array
@@ -126,6 +141,13 @@ export type Driver = {
   orientation?(v: number, name: string): Uint8Array
   /** LED panels: wipe every stored slot. */
   deleteAll?(name: string): Uint8Array
+}
+
+/** The parts of an advertisement a family can read, as Web Bluetooth hands them over. */
+export type Advert = {
+  manufacturerData: ReadonlyMap<number, DataView>
+  // Chrome keys service data by the full uuid string.
+  serviceData: ReadonlyMap<string | number, DataView>
 }
 
 /** What a panel says about itself. Size is absent when the type byte is not in the table. */
