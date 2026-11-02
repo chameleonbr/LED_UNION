@@ -98,50 +98,58 @@ function speedBrightness(name: string, commit = true): Uint8Array {
   ])
 }
 
-/**
- * The 13 built-in effects. The app has no names for them — its own UI labels them
- * M1..M13 from the index — so we do the same rather than inventing names.
- */
-export const effects: Effect[] = Array.from({ length: 13 }, (_, i) => ({
-  id: i,
-  name: `M${i + 1}`,
-}))
-
 const SCENE_PARA_SIZE = 72
 /** ScenePara.MAX_COLOR_QTY in the original app. */
 const MAX_COLOR_QTY = 14
-/** Byte 14 sentinel: this scene has no built-in effect, the colour list drives it. */
-const NO_EFFECT = 0xff
+
+type Rgb = { r: number; g: number; b: number }
+const c = (r: number, g: number, b: number): Rgb => ({ r, g, b })
+const RAINBOW = [c(255, 0, 0), c(0, 255, 0), c(0, 0, 255), c(255, 255, 0), c(255, 0, 255), c(0, 255, 255), c(255, 255, 255)]
+const RGB3 = RAINBOW.slice(0, 3)
+const BLACK = c(0, 0, 0)
+/** FlushDynamicColor's "with black" flag: a dark step after every colour. */
+const gaps = (cs: Rgb[]) => cs.flatMap((x) => [x, BLACK])
 
 /**
- * An effect is applied by sending a whole 72-byte scene description, not an id.
- * Everything not named here stays zero, which is what the app sends for a freshly
- * built scene.
+ * On PWM wiring (DIM, CCT, RGB, RGBW) the app has no effect ids: its effect buttons are
+ * colour-list scenes, jump or fade, from MyData.Flush3CHScenes. Byte 14's mode index
+ * belongs to addressable chase mode, which this driver does not offer; a PWM controller
+ * ignores it. The first six are the app's own; the last two use the same builder.
  */
-function sceneFrame(
-  name: string,
-  effectId: number,
-  r = 255,
-  g = 255,
-  b = 255,
-): Uint8Array {
+const PRESETS: Array<{ name: string; fade: boolean; colors: Rgb[]; strobe?: number }> = [
+  { name: 'Jump 7 colours', fade: false, colors: RAINBOW },
+  { name: 'Flash 3 colours', fade: false, colors: gaps(RGB3) },
+  { name: 'Fade 3 colours', fade: true, colors: RGB3 },
+  { name: 'Pulse 7 colours', fade: true, colors: gaps(RAINBOW) },
+  { name: 'Breathe red', fade: true, colors: gaps([RAINBOW[0]]) },
+  // FlushTwoColor(0, red, blue, 1, 255): the 255 lands on the strobe byte.
+  { name: 'Police', fade: false, colors: gaps([RAINBOW[0], RAINBOW[2]]), strobe: 255 },
+  { name: 'Jump 3 colours', fade: false, colors: RGB3 },
+  { name: 'Fade 7 colours', fade: true, colors: RAINBOW },
+]
+
+export const effects: Effect[] = PRESETS.map((p, id) => ({ id, name: p.name }))
+
+/** A colour-list scene: what both the built-in effects and custom sequences send. */
+function listScene(name: string, colors: Rgb[], fade: boolean, strobe?: number): Uint8Array {
   const s = stateFor(name)
+  const list = colors.slice(0, MAX_COLOR_QTY)
   const p = new Array(SCENE_PARA_SIZE).fill(0)
-  p[0] = 0 // fade off
+  p[0] = fade ? 1 : 0
   p[1] = s.speed
   p[2] = s.brightness
-  p[3] = 1 // one colour entry
+  p[3] = list.length
   // Offset 4 is the scene slot, and the app zeroes it on every buffer it builds.
   // Not to be confused with the 0x88 command's own scene field, which uses 255.
-  p[4] = 0
-  p[6] = s.strobe
-  // Low 7 bits are the effect index; bit 7 turns the chase/dynamic mode on.
-  p[14] = (clamp(effectId, 0, 0x7f) | 0x80) & 0xff
-  // Colour entries start at 16 and are [W, R, G, B].
-  p[16] = 0
-  p[17] = byte(r)
-  p[18] = byte(g)
-  p[19] = byte(b)
+  p[6] = strobe ?? s.strobe
+  // Byte 14 stays 0, as in every PWM scene the app builds.
+  list.forEach((x, i) => {
+    const o = 16 + i * 4
+    p[o] = 0 // white channel
+    p[o + 1] = byte(x.r)
+    p[o + 2] = byte(x.g)
+    p[o + 3] = byte(x.b)
+  })
   return frame(CMD.IMMEDIATE_SCENE, p)
 }
 
@@ -254,37 +262,18 @@ export const bledim: Driver = {
 
   effect(e, name) {
     delete stateFor(name).color
-    return sceneFrame(name, e.id)
+    const p = PRESETS[clamp(e.id, 0, PRESETS.length - 1)]
+    return listScene(name, p.colors, p.fade, p.strobe)
   },
 
   /**
    * A whole colour sequence fits in one scene frame: the structure already carries up
    * to MAX_COLOR_QTY = 14 entries, plus the fade flag and speed. No upload dance.
-   *
-   * Byte 14 is set to the "no built-in effect" sentinel, because what plays here is the
-   * colour list itself. Unverified on hardware.
    */
   customEffect(spec, name): Uint8Array[] {
-    const colors = spec.colors.slice(0, MAX_COLOR_QTY)
-    if (colors.length === 0) return []
-    const s = stateFor(name)
-    delete s.color
-    const p = new Array(SCENE_PARA_SIZE).fill(0)
-    p[0] = spec.fade ? 1 : 0
-    p[1] = s.speed
-    p[2] = s.brightness
-    p[3] = colors.length
-    p[4] = 0
-    p[6] = s.strobe
-    p[14] = NO_EFFECT
-    colors.forEach((c, i) => {
-      const o = 16 + i * 4
-      p[o] = 0 // white channel
-      p[o + 1] = byte(c.r)
-      p[o + 2] = byte(c.g)
-      p[o + 3] = byte(c.b)
-    })
-    return [frame(CMD.IMMEDIATE_SCENE, p)]
+    if (spec.colors.length === 0) return []
+    delete stateFor(name).color
+    return [listScene(name, spec.colors, spec.fade)]
   },
 
   /** This family toggles its hardware microphone explicitly. */

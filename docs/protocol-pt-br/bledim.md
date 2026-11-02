@@ -86,11 +86,26 @@ Quadro total = 72 + 7 = **79** (`SCENE_PACKET_SIZE`).
 | 11 | canal 4 = W |
 | 12 | largura da cor |
 | 13 | índice da cor |
-| **14** | **id do efeito**: bits 0-6 = índice 0..12, bit 7 = modo chase |
+| **14** | índice do modo chase (só fiação endereçável); `0` na fiação PWM |
 | 16..71 | até 14 entradas de cor × 4 bytes `[W, R, G, B]` |
 
-Byte 14 igual a `255` significa "sem efeito" — cena de cor estática. A UI rotula
-`M1..M13` a partir do índice, e o app não tem nomes próprios para eles.
+Na fiação PWM (DIM, CCT, RGB, RGBW) o app **não tem ids de efeito**. Os botões de
+efeito são cenas de lista de cores de `MyData.Flush3CHScenes`: o byte 0 escolhe pulo
+(`0`) ou fade (`1`), o byte 3 é a quantidade de cores, e `FlushDynamicColor` pode pôr
+uma entrada preta depois de cada cor. O byte 14 fica `0`. O índice de modo no byte 14
+(com o bit 7 significando "reverso", só para modos acima de 1) é da `ChaseDialog`, a
+tela de fita endereçável; um controlador PWM o ignora.
+
+| slot do app | construtor | toca |
+|---|---|---|
+| 7 | `FlushDynamicColor(0, 7, 0, 3)` | pula R G B Y M C W |
+| 8 | `FlushDynamicColor(0, 3, 1, 3)` | pula R G B com um passo apagado depois de cada |
+| 9 | `FlushDynamicColor(1, 3, 0, 3)` | fade R G B |
+| 10 | `FlushDynamicColor(1, 7, 1, 3)` | fade de 7 cores passando pelo apagado |
+| 11 | `FlushDynamicColor(1, 1, 1, 3)` | fade vermelho e apagado (respiração) |
+| 12 | `FlushTwoColor(0, vermelho, azul, 1, 255)` | pula vermelho, apagado, azul, apagado, strobe 255 |
+
+Fonte: o app no versionCode 51, o último build publicado sem empacotador.
 
 ### `0x81` acende, `0x82` grava
 

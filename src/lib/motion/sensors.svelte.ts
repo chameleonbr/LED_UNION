@@ -24,6 +24,9 @@ export const live = $state({
   accel: 'off' as SensorState,
   paused: '' as '' | 'hidden' | 'stealth',
   lastTrigger: '',
+  /** Which rule fired and when, so its card can light up for a moment. */
+  lastTriggerId: '',
+  lastTriggerAt: 0,
   /** Writes that failed this run (the device's own card says why). */
   errors: 0,
   calibrating: false,
@@ -47,7 +50,12 @@ function handle(actions: Action[]) {
   // Calibrating while stopped also listens to the sensor; that must never reach the lights.
   if (!actions.length || !live.running) return
   if (store.stealth || live.paused) return
-  for (const a of actions) if (a.kind === 'fire') live.lastTrigger = a.rule.name
+  for (const a of actions) {
+    if (a.kind !== 'fire') continue
+    live.lastTrigger = a.rule.name
+    live.lastTriggerId = a.rule.id
+    live.lastTriggerAt = performance.now()
+  }
   void execute(actions)
 }
 

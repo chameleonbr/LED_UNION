@@ -47,9 +47,7 @@
   const activeCustom = $derived(
     store.customEffects.find((f) => f.id === look.customEffectId),
   )
-  const summary = $derived(
-    activeCustom?.name ?? look.effect?.name ?? t('effects.none'),
-  )
+  const summary = $derived(activeCustom?.name ?? look.effect?.name ?? '')
 
   function rgb(hex: string) {
     const n = parseInt(hex.slice(1), 16)
@@ -102,25 +100,12 @@
     setLook(dkey, { cct: v, colorHex: undefined, white: undefined, effect: undefined, customEffectId: undefined })
   }
 
-  async function chooseEffect(e: Event) {
-    const v = (e.currentTarget as HTMLSelectElement).value
-    if (v === '__new__') {
-      onEditCustom()
-      return
-    }
-    if (v === '') return
-    const [kind, rest] = [v.slice(0, 1), v.slice(2)]
-    if (kind === 'b') {
-      const fx = builtIn[Number(rest)]
-      if (!fx) return
-      if (!(await applyTo([dkey], (d, n, c, v) => d.effect(fx, n, c, v)))) return
-      setLook(dkey, { effect: fx, customEffectId: undefined })
-    } else {
-      const fx = store.customEffects.find((x) => x.id === rest)
-      if (!fx) return
-      await runCustom(fx)
-    }
+  async function pickBuiltIn(fx: Effect) {
+    if (!(await applyTo([dkey], (d, n, c, v) => d.effect(fx, n, c, v)))) return
+    setLook(dkey, { effect: fx, customEffectId: undefined })
   }
+  const isActive = (fx: Effect) =>
+    !look.customEffectId && look.effect?.id === fx.id && look.effect?.group === fx.group
 
   async function runCustom(fx: CustomEffect) {
     // sendFrames uses the non-coalescing queue: dropping a colour mid-upload would
@@ -321,47 +306,28 @@
     {/if}
 
     {#if caps.effects}
-      <label class="field">
+      <div class="field">
         <span>{t('effects.effect')}</span>
-        <select
-          class="sel"
-          value={look.customEffectId
-            ? `c:${look.customEffectId}`
-            : look.effect
-              ? `b:${builtIn.findIndex((e) => e.id === look.effect!.id && e.group === look.effect!.group)}`
-              : ''}
-          onchange={chooseEffect}
-        >
-          <option value="">{t('effects.none')}</option>
-
+        <div class="chips" role="group" aria-label={t('effects.effect')}>
           {#if supportsCustom}
-            {#if store.customEffects.length}
-              <optgroup label={t('effects.myEffects')}>
-                {#each store.customEffects as fx (fx.id)}
-                  <option value={`c:${fx.id}`}>{fx.name}</option>
-                {/each}
-              </optgroup>
-            {/if}
-            <option value="__new__">{t('effects.newEffect')}</option>
-          {/if}
-
-          {#if groupNames.length}
-            {#each groupNames as g}
-              <optgroup label={g}>
-                {#each builtIn as e, i}
-                  {#if e.group === g}<option value={`b:${i}`}>{e.name}</option>{/if}
-                {/each}
-              </optgroup>
+            {#each store.customEffects as fx (fx.id)}
+              <button class="chip" aria-pressed={look.customEffectId === fx.id} onclick={() => runCustom(fx)}>
+                <span class="stripe" style:background={`linear-gradient(90deg, ${fx.colors.join(', ')})`}></span>
+                {fx.name}
+              </button>
             {/each}
-          {:else}
-            <optgroup label={t('effects.builtIn')}>
-              {#each builtIn as e, i}
-                <option value={`b:${i}`}>{e.name}</option>
-              {/each}
-            </optgroup>
+            <button class="chip new" onclick={onEditCustom}>{t('effects.newEffect')}</button>
           {/if}
-        </select>
-      </label>
+          {#each groupNames.length ? groupNames : [undefined] as g}
+            {#if g}<span class="chip-group">{g}</span>{/if}
+            {#each builtIn as e (`${e.group}:${e.id}`)}
+              {#if e.group === g}
+                <button class="chip" aria-pressed={isActive(e)} onclick={() => pickBuiltIn(e)}>{e.name}</button>
+              {/if}
+            {/each}
+          {/each}
+        </div>
+      </div>
 
       {#if !supportsCustom}
         <div class="small muted">{t('custom.unsupported')}</div>
@@ -369,7 +335,7 @@
     {/if}
 
     <label class="field">
-      <span>{t('effects.brightness')} — {look.brightness ?? 100}%</span>
+      <span class="spread"><span>{t('effects.brightness')}</span><span>{look.brightness ?? 100}%</span></span>
       <input
         type="range" min="0" max="100" value={look.brightness ?? 100}
         oninput={(e) => setBrightness(+(e.currentTarget as HTMLInputElement).value)}
@@ -378,7 +344,7 @@
 
     {#if caps.speed}
       <label class="field">
-        <span>{t('effects.speed')} — {look.speed ?? 50}%</span>
+        <span class="spread"><span>{t('effects.speed')}</span><span>{look.speed ?? 50}%</span></span>
         <input
           type="range" min="0" max="100" value={look.speed ?? 50}
           oninput={(e) => setSpeed(+(e.currentTarget as HTMLInputElement).value)}

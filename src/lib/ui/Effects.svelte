@@ -36,7 +36,8 @@
 
   let picked = $state<Record<string, boolean>>({})
   let sceneName = $state('')
-  let editing = $state(false)
+  /** The light whose card opened the custom-effect editor, which previews on it. */
+  let editing = $state<string | undefined>(undefined)
 
   const pickedKeys = $derived(logicals.filter((l) => picked[l.key]).map((l) => l.key))
 
@@ -115,6 +116,7 @@
   }
 
   let bright = $state<Record<string, number>>({})
+  let groupFx = $state<Record<string, number>>({})
 </script>
 
 <div class="col">
@@ -130,30 +132,31 @@
         label={l.label}
         checked={picked[l.key] ?? false}
         onToggle={(v) => (picked[l.key] = v)}
-        onEditCustom={() => (editing = true)}
+        onEditCustom={() => (editing = l.key)}
       />
     {/each}
 
     {#if editing}
-      <CustomEffectEditor onclose={() => (editing = false)} />
+      <CustomEffectEditor previewKey={editing} onclose={() => (editing = undefined)} />
     {/if}
 
 
 
     {#each targets as tg (tg.id)}
-      <div class="card col" style="border-style:dashed">
-        <strong>{tg.name}</strong>
-        {#if tg.hint}<div class="small muted">{tg.hint}</div>{/if}
+      <div class="card col group">
         <div class="row">
-          <button class="primary grow" onclick={() => allPower(tg.keys, true)}>{t('effects.on')}</button>
-          <button class="grow" onclick={() => allPower(tg.keys, false)}>{t('effects.off')}</button>
+          <div class="grow">
+            <strong>{tg.name}</strong>
+            {#if tg.hint}<div class="small muted">{tg.hint}</div>{/if}
+          </div>
+          <div class="power" role="group" aria-label={tg.name}>
+            <button class="small" onclick={() => allPower(tg.keys, true)}>{t('effects.on')}</button>
+            <button class="small" onclick={() => allPower(tg.keys, false)}>{t('effects.off')}</button>
+          </div>
         </div>
+        <ColorSelect onpick={(hex) => allColor(tg.keys, hex)} />
         <label class="field">
-          <span>{t('effects.color')}</span>
-          <ColorSelect onpick={(hex) => allColor(tg.keys, hex)} />
-        </label>
-        <label class="field">
-          <span>{t('effects.brightness')} — {bright[tg.id] ?? 100}%</span>
+          <span class="spread"><span>{t('effects.brightness')}</span><span>{bright[tg.id] ?? 100}%</span></span>
           <input type="range" min="0" max="100" value={bright[tg.id] ?? 100}
                  oninput={(e) => {
                    const v = +(e.currentTarget as HTMLInputElement).value
@@ -162,18 +165,15 @@
                  }} />
         </label>
         {#if tg.effects.length > 0}
-          <label class="field">
+          <div class="field">
             <span>{t('effects.effect')}</span>
-            <select onchange={(e) => {
-              const value = (e.currentTarget as HTMLSelectElement).value
-              if (value === '') return
-              const fx = tg.effects[+value]
-              if (fx) allEffect(tg.keys, fx)
-            }}>
-              <option value="">—</option>
-              {#each tg.effects as fx, i}<option value={i}>{fx.name}</option>{/each}
-            </select>
-          </label>
+            <div class="chips">
+              {#each tg.effects as fx, i (i)}
+                <button class="chip" aria-pressed={groupFx[tg.id] === i}
+                        onclick={() => { groupFx[tg.id] = i; allEffect(tg.keys, fx) }}>{fx.name}</button>
+              {/each}
+            </div>
+          </div>
         {/if}
       </div>
     {/each}
@@ -192,3 +192,11 @@
     </div>
   {/if}
 </div>
+
+<style>
+  /* Groups act on several lights at once: a dashed edge sets them apart from one light. */
+  .group { border: 1px dashed var(--line); }
+  .power { display: flex; }
+  .power button:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+  .power button:last-child { border-radius: 0 var(--radius) var(--radius) 0; border-left: 0; }
+</style>

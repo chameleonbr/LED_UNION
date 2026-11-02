@@ -114,15 +114,18 @@ test('place fires on a real crossing only, with hysteresis', () => {
   assert.equal(onFix(e, fix(6000, 1, 0, null, 500), [rule], [home]).length, 0)
 })
 
-test('the simulated drive brakes once and drives brightness up', () => {
+test('the simulated drive brakes twice and drives brightness to full', () => {
   const brake = brakeLight('b', 'Brake', ['x'])
   const speed = brightnessBySpeed('s', 'Speed', ['x'])
   const e = newEngine(SIM_CAL)
   const acts = simulatedDrive().flatMap((s) =>
     s.a ? onMotion(e, s.t, s.a, [brake, speed]) : onFix(e, s.fix!, [brake, speed], []),
   )
-  assert.equal(acts.filter((a) => a.kind === 'fire').length, 1)
+  assert.equal(acts.filter((a) => a.kind === 'fire').length, 2)
   const levels = acts.filter((a) => a.kind === 'map').map((a) => a.value as number)
   assert.equal(levels[0], 20)
-  assert.equal(Math.max(...levels), 68)
+  assert.equal(Math.max(...levels), 100)
+  assert.equal(levels.at(-1), 20)
+  const kmh = simulatedDrive().flatMap((s) => (s.fix ? [s.fix.speed! * 3.6] : []))
+  assert.ok(Math.max(...kmh) >= 149 && kmh.at(-1) === 0)
 })

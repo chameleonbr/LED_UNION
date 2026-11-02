@@ -141,3 +141,19 @@ export async function execute(actions: Action[]) {
     }
   }
 }
+
+/**
+ * Fire one rule's action now, as if the car did it, then put the lights back. Only
+ * while Motion is stopped: begin/end would cut a running drive's snapshot.
+ */
+export async function tryRule(rule: MotionRule) {
+  const action = rule.trigger?.action ?? rule.place?.action
+  if (!action) return
+  const armed = { ...rule, enabled: true }
+  begin([armed])
+  await execute([{ kind: 'fire', rule: armed, action }])
+  const ms = action.kind === 'flash' ? action.times * 2 * FLASH_MS + 1500
+    : action.kind === 'slot' ? action.seconds * 1000 : 3000
+  await sleep(ms)
+  await end()
+}

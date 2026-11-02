@@ -1,6 +1,7 @@
 <script lang="ts">
   import { store, addColor, removeColor, resetColors } from '../store.svelte.ts'
   import { t } from '../i18n.svelte.ts'
+  import ColorSliders from './ColorSliders.svelte'
 
   let {
     value = $bindable<string | undefined>(undefined),
@@ -50,7 +51,7 @@
 </script>
 
 <div class="col" style="gap:8px">
-  <div class="grid">
+  <div class="swipe" role="group" aria-label={t('effects.color')}>
     {#each store.colors as c (c.id)}
       <button
         class="chip"
@@ -84,10 +85,10 @@
 
   {#if creating}
     <div class="card col" style="gap:8px">
-      <!-- Live: every drag of the picker goes straight to the lights, so the colour
-           being named is the colour actually on the wall. -->
-      <input type="color" bind:value={draftHex} style="height:52px"
-             oninput={() => pick(draftHex)} />
+      <!-- Live: every drag goes straight to the lights, so the colour being named is
+           the colour actually on the wall. -->
+      <div class="preview" style:background={draftHex}></div>
+      <ColorSliders value={draftHex} oninput={(hex) => { draftHex = hex; pick(hex) }} />
       <input type="text" placeholder={t('color.name')} bind:value={draftName} />
       <div class="row">
         <button class="primary grow" onclick={create}>{t('common.save')}</button>
@@ -98,14 +99,9 @@
 </div>
 
 <style>
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
-    gap: 8px;
-  }
-
   .chip {
-    aspect-ratio: 1;
+    width: 44px;
+    height: 44px;
     min-height: 0;
     padding: 0;
     border-radius: 10px;
@@ -119,6 +115,8 @@
     border-color: var(--text);
     box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text);
   }
+
+  .preview { height: 40px; border-radius: var(--radius); border: 1px solid var(--line); }
 
   .chip.add {
     background: var(--surface-2);

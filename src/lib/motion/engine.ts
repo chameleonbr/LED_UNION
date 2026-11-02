@@ -242,20 +242,23 @@ export const accelRule = (id: string, name: string, targets: string[]): MotionRu
 })
 
 /**
- * A synthetic drive for the Debug simulator and the tests: speed up to 60 km/h, brake
- * at −0.5 G, then a right-hand corner at +0.45 G. Phone flat, top edge forward.
+ * A synthetic drive for the demo button and the tests: 0 to 150 km/h with a corner each
+ * way, then two hard brakes down to a stop, about 30 s. Phone flat, top edge forward.
  */
 export const SIM_CAL: Calibration = { gravity: [0, 0, G], forward: [0, 1, 0], at: '' }
+const DRIVE: Array<[ms: number, gLong: number, gLat: number]> = [
+  [4000, 0.35, 0], [3000, 0.2, 0], [1500, 0, 0.5], [3000, 0.3, 0], [1500, 0, -0.5],
+  [5000, 0.27, 0], [2000, 0, 0], [5000, -0.6, 0], [1500, 0, 0.45], [3000, -0.45, 0], [1500, 0, 0],
+]
 export function simulatedDrive(stepMs = 50): Array<{ t: number; a?: Vec3; fix?: Fix }> {
   const out: Array<{ t: number; a?: Vec3; fix?: Fix }> = []
-  const accel = (t: number): [number, number] =>
-    t < 6000 ? [0.28, 0] : t >= 7000 && t < 8000 ? [-0.5, 0] : t >= 9000 && t < 10000 ? [0, 0.45] : [0, 0]
-  for (let t = 0; t <= 11000; t += stepMs) {
-    const [long, lat] = accel(t)
-    out.push({ t, a: [lat * G, long * G, G] })
-    if (t % 1000 === 0) {
-      const kmh = t <= 6000 ? t / 100 : t < 8000 ? 60 - (t - 6000) / 100 : 40
-      out.push({ t, fix: { t, lat: 0, lon: 0, speed: kmh / 3.6, accuracy: 5 } })
+  let t = 0
+  let v = 0 // m/s, from the same G the accelerometer reports
+  for (const [ms, long, lat] of DRIVE) {
+    for (const stop = t + ms; t < stop; t += stepMs) {
+      out.push({ t, a: [lat * G, long * G, G] })
+      if (t % 1000 === 0) out.push({ t, fix: { t, lat: 0, lon: 0, speed: v, accuracy: 5 } })
+      v = Math.min(150 / 3.6, Math.max(0, v + (long * G * stepMs) / 1000))
     }
   }
   return out
